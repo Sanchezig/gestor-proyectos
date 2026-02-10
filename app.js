@@ -2529,31 +2529,37 @@ function sortDailyProjects(projects) {
 
 
         function switchView(view) {
-            // 1. Ocultar todas las vistas
-            document.getElementById('dailyView').classList.remove('active');
-            document.getElementById('fichaView').classList.remove('active');
-            document.getElementById('teamView').classList.remove('active');
-            document.getElementById('dashboardView').classList.remove('active');
+            // 1. Referencias a los contenedores
+            const dailyView = document.querySelector('.daily-view');
+            const fichaView = document.querySelector('.project-ficha');
+            const teamView = document.querySelector('.team-view');
+            const dashboardView = document.querySelector('.dashboard-view');
 
-            // 2. Quitar clase active de botones
-            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+            // 2. Ocultar TODO visualmente
+            dailyView.classList.remove('active');
+            fichaView.classList.remove('active');
+            teamView.classList.remove('active');
+            dashboardView.classList.remove('active');
 
-            // 3. Mostrar la vista correspondiente y actualizar botón
+            // 3. Quitar clase active de botones
+            document.querySelectorAll('.view-toggle button').forEach(btn => btn.classList.remove('active'));
+
+            // 4. Lógica de activación y LIMPIEZA
             if (view === 'daily') {
-                document.getElementById('dailyView').classList.add('active');
-                document.querySelectorAll('.nav-btn')[1].classList.add('active');
+                dailyView.classList.add('active');
+                document.querySelector('.view-toggle button:nth-child(1)').classList.add('active');
                 renderDaily();
             } else if (view === 'ficha') {
-                document.getElementById('fichaView').classList.add('active');
-                document.querySelectorAll('.nav-btn')[3].classList.add('active');
+                fichaView.classList.add('active');
+                document.querySelector('.view-toggle button:nth-child(2)').classList.add('active');
                 renderFicha();
-            } else if (view === 'team') {
-                document.getElementById('teamView').classList.add('active');
-                document.querySelectorAll('.nav-btn')[2].classList.add('active');
+            } else if (view === 'equipo') {
+                teamView.classList.add('active');
+                document.querySelector('.view-toggle button:nth-child(3)').classList.add('active');
                 renderTeamView();
             } else if (view === 'dashboard') {
-                document.getElementById('dashboardView').classList.add('active');
-                document.querySelectorAll('.nav-btn')[0].classList.add('active');
+                dashboardView.classList.add('active');
+                document.querySelector('.view-toggle button:nth-child(4)').classList.add('active');
                 renderDashboard();
             }
         }
