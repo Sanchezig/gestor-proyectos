@@ -27,6 +27,48 @@
             line-height: 1.5;
         }
 
+    /* Layout principal adaptado a HTML actual */
+    .app-container {
+        display: flex;
+        min-height: 100vh;
+        background: radial-gradient(circle at top left, #f2ebff 0, #f5f3f8 40%, #f5f3f8 100%);
+    }
+
+    .main-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background: var(--color-surface);
+        box-shadow: var(--shadow-soft);
+        padding: 0;
+    }
+
+    .views-container {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 24px;
+        background: var(--color-background);
+        border-radius: 12px;
+        box-shadow: var(--shadow-soft);
+        margin: 16px;
+    }
+
+    .dashboard-view,
+    .daily-view,
+    .team-view,
+    .project-ficha {
+        display: none;
+        width: 100%;
+        min-height: 400px;
+    }
+    .dashboard-view.active,
+    .daily-view.active,
+    .team-view.active,
+    .project-ficha.active {
+        display: block;
+    }
+
         .container {
             display: flex;
             height: 100vh;

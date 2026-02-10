@@ -8,12 +8,10 @@
 </head>
 <body>
     <div class="app-container">
-        <!-- Sidebar Izquierdo -->
         <aside class="sidebar">
             <div class="sidebar-header">
                 <h1>Gestor Proyectos</h1>
             </div>
-
             <div class="sidebar-section">
                 <div class="sidebar-title" onclick="toggleSidebarSection('activos')">
                     <span>📊 Activos</span>
@@ -21,7 +19,6 @@
                 </div>
                 <div id="projectsListActive" class="projects-list expanded"></div>
             </div>
-
             <div class="sidebar-section">
                 <div class="sidebar-title" onclick="toggleSidebarSection('completados')">
                     <span>✅ Completados</span>
@@ -29,53 +26,26 @@
                 </div>
                 <div id="projectsListCompleted" class="projects-list expanded"></div>
             </div>
-
             <div class="sidebar-actions">
                 <button onclick="openNewProjectModal()" class="btn-new-project">➕ Nuevo Proyecto</button>
                 <button onclick="changeUser()" class="btn-change-user">👤 Usuario</button>
             </div>
-
             <div class="sidebar-footer">
                 <div id="currentUserDisplay" style="text-align: center; color: #666; font-size: 12px;"></div>
             </div>
         </aside>
-
-        <!-- Contenido Principal -->
         <main class="main-content">
-            <!-- Barra de Navegación -->
-            <nav class="navbar">
-                <button class="nav-btn active" onclick="switchView('dashboard')">📊 Dashboard</button>
-                <button class="nav-btn" onclick="switchView('daily')">📋 Daily</button>
-                <button class="nav-btn" onclick="switchView('team')">👥 Equipo</button>
-                <button class="nav-btn" onclick="switchView('ficha')">📄 Ficha</button>
+            <nav class="navbar view-toggle">
+                <button class="view-btn active" onclick="switchView('dashboard')">📊 Dashboard</button>
+                <button class="view-btn" onclick="switchView('daily')">📋 Daily</button>
+                <button class="view-btn" onclick="switchView('equipo')">👥 Equipo</button>
+                <button class="view-btn" onclick="switchView('ficha')">📄 Ficha</button>
             </nav>
-
-            <!-- Vistas -->
             <div class="views-container">
-                <!-- Dashboard -->
-                <div id="dashboardView" class="view active"></div>
-
-                <!-- Daily -->
-                <div id="dailyView" class="view">
-                    <div class="daily-header">
-                        <div class="daily-tabs">
-                            <button id="btnDailyActivos" class="daily-tab active" onclick="setDailyViewMode('activos')">📅 Activos</button>
-                            <button id="btnDailyCompletados" class="daily-tab" onclick="setDailyViewMode('completados')">✅ Completados</button>
-                        </div>
-                        <div class="week-nav">
-                            <button onclick="previousWeek()">◀ Anterior</button>
-                            <span id="weekInfo" class="week-info"></span>
-                            <button onclick="nextWeek()">Siguiente ▶</button>
-                        </div>
-                    </div>
-                    <div id="dailyTableContainer"></div>
-                </div>
-
-                <!-- Team -->
-                <div id="teamView" class="view"></div>
-
-                <!-- Ficha -->
-                <div id="fichaView" class="view"></div>
+                <div class="dashboard-view active"></div>
+                <div class="daily-view"></div>
+                <div class="team-view"></div>
+                <div class="project-ficha"></div>
             </div>
         </main>
     </div>
