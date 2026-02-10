@@ -2529,53 +2529,32 @@ function sortDailyProjects(projects) {
 
 
         function switchView(view) {
-            // 1. Referencias a los contenedores
-            const dailyView = document.querySelector('.daily-view');
-            const fichaView = document.querySelector('.project-ficha');
-            const teamView = document.querySelector('.team-view');
-            const dashboardView = document.querySelector('.dashboard-view');
+            // 1. Ocultar todas las vistas
+            document.getElementById('dailyView').classList.remove('active');
+            document.getElementById('fichaView').classList.remove('active');
+            document.getElementById('teamView').classList.remove('active');
+            document.getElementById('dashboardView').classList.remove('active');
 
-            // 2. Ocultar TODO visualmente
-            dailyView.classList.remove('active');
-            fichaView.classList.remove('active');
-            teamView.classList.remove('active');
-            dashboardView.classList.remove('active');
+            // 2. Quitar clase active de botones
+            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
 
-            // 3. Quitar clase active de botones
-            document.querySelectorAll('.view-toggle button').forEach(btn => btn.classList.remove('active'));
-
-            // 4. Lógica de activación y LIMPIEZA
+            // 3. Mostrar la vista correspondiente y actualizar botón
             if (view === 'daily') {
-                dailyView.classList.add('active');
-                document.querySelector('.view-toggle button:nth-child(1)').classList.add('active');
-                document.getElementById('viewTitle').textContent = 'Daily';
-
-                // Limpiar la vista de equipo para evitar duplicados fantasma
-                teamView.innerHTML = '';
-
+                document.getElementById('dailyView').classList.add('active');
+                document.querySelectorAll('.nav-btn')[1].classList.add('active');
                 renderDaily();
             } else if (view === 'ficha') {
-                fichaView.classList.add('active');
-                document.querySelector('.view-toggle button:nth-child(2)').classList.add('active');
-                document.getElementById('viewTitle').textContent = 'Ficha Proyecto';
-
-                // Limpiar la vista de equipo
-                teamView.innerHTML = '';
-
+                document.getElementById('fichaView').classList.add('active');
+                document.querySelectorAll('.nav-btn')[3].classList.add('active');
                 renderFicha();
-            } else if (view === 'equipo') {
-                teamView.classList.add('active');
-                document.querySelector('.view-toggle button:nth-child(3)').classList.add('active');
-                document.getElementById('viewTitle').textContent = 'Calendario de Equipo';
+            } else if (view === 'team') {
+                document.getElementById('teamView').classList.add('active');
+                document.querySelectorAll('.nav-btn')[2].classList.add('active');
                 renderTeamView();
-            } else if (view === 'dashboard') {          // <-- AQUÍ
-                dashboardView.classList.add('active');
-                document
-                  .querySelector('.view-toggle button:nth-child(4)')
-                  .classList.add('active');
-                document.getElementById('viewTitle').textContent = 'Dashboard Proyectos';
-                renderDashboard();            
-            
+            } else if (view === 'dashboard') {
+                document.getElementById('dashboardView').classList.add('active');
+                document.querySelectorAll('.nav-btn')[0].classList.add('active');
+                renderDashboard();
             }
         }
 
