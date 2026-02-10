@@ -1,267 +1,204 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestor de Proyectos</title>
-    <style>
-/* --- styles.css --- */
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-:root {
-    --color-background: #f5f3f8;
-    --color-surface: #ffffff;
-    --color-text: #221933;
-    --color-text-secondary: #6b607d;
-    --color-primary: #7a1ea2;
-    --color-primary-hover: #5c177a;
-    --color-success: #00a58c;
-    --color-warning: #ffb547;
-    --color-danger: #d32f2f;
-    --color-border: #e0d6ec;
-    --color-day-light: #efe2ff;
-    --color-checkbox-bg: #f4eefb;
-    --shadow-soft: 0 4px 16px rgba(14, 0, 40, 0.08);
-}
-.body,
-body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-    background: radial-gradient(circle at top left, #d6b6f7 0, #f2ebff 40%, #f5f3f8 100%) !important;
-    color: var(--color-text);
-    line-height: 1.5;
-}
-.app-container {
-    background: radial-gradient(circle at top left, #d6b6f7 0, #f2ebff 40%, #f5f3f8 100%) !important;
-}
-.app-container {
-    display: flex;
-    min-height: 100vh;
-    background: radial-gradient(circle at top left, #d6b6f7 0, #f2ebff 40%, #f5f3f8 100%);
-    gap: 0;
-}
-.sidebar {
-    width: 240px;
-    background: linear-gradient(180deg, #2a1b4a 0%, #321d57 40%, #3a1f63 100%);
-    color: #f8f4ff;
-    padding: 22px 18px;
-    display: flex;
-    flex-direction: column;
-    box-shadow: var(--shadow-soft);
-    position: relative;
-}
-.main-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    background: var(--color-surface);
-    box-shadow: var(--shadow-soft);
-    padding: 0;
-    min-width: 0;
-    border-radius: 16px;
-    margin: 18px 18px 18px 0;
-    overflow: hidden;
-}
-.views-container {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    padding: 24px;
-    background: var(--color-background);
-    border-radius: 12px;
-    box-shadow: var(--shadow-soft);
-    margin: 0;
-    min-width: 0;
-}
-.dashboard-view,
-.daily-view,
-.team-view,
-.project-ficha {
-    width: 100%;
-    min-height: 400px;
-    background: var(--color-surface);
-    border-radius: 12px;
-    box-shadow: var(--shadow-soft);
-    padding: 24px;
-    margin-bottom: 24px;
-    display: none;
-}
-.dashboard-view.active,
-.daily-view.active,
-.team-view.active,
-.project-ficha.active {
-    display: block;
-}
-/* ...resto de estilos... */
-    </style>
+    <title>PROD - WTW - Gestor de Proyectos</title>
+    <link rel="icon" type="image/x-icon" href="calendar.ico">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
 </head>
 <body>
-    <div class="app-container">
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <h1>Gestor Proyectos</h1>
+    <div class="container">
+        <div class="sidebar">
+            <div class="sidebar-logo">WTW</div>
+            <div class="sidebar-subtitle">Gestor de iniciativas & dailys</div>
+            <button class="btn-new-project" onclick="openNewProjectModal()">✨ Nuevo proyecto</button>
+
+            <div class="sidebar-content">
+                <div class="sidebar-title">Activos</div>
+                <ul class="sidebar-list" id="projectsListActive"></ul>
+
+                <div class="sidebar-title">Completados</div>
+                <ul class="sidebar-list" id="projectsListCompleted"></ul>
             </div>
-            <div class="sidebar-section">
-                <div class="sidebar-title" onclick="toggleSidebarSection('activos')">
-                    <span>📊 Activos</span>
-                    <span class="section-toggle-icon" data-collapsed="false"></span>
+
+            <!-- Control de usuario -->
+            <div class="user-control">
+                <div class="user-icon">👤</div>
+                <div class="user-info">
+                    <div class="user-name" id="currentUserDisplay">NN</div>
+                    <button class="user-change-btn" onclick="changeUser()">Cambiar</button>
                 </div>
-                <div id="projectsListActive" class="projects-list expanded"></div>
             </div>
-            <div class="sidebar-section">
-                <div class="sidebar-title" onclick="toggleSidebarSection('completados')">
-                    <span>✅ Completados</span>
-                    <span class="section-toggle-icon" data-collapsed="false"></span>
+        </div>
+
+
+        <div class="main-content">
+            <div class="toolbar">
+                <div class="toolbar-left">
+                    <h2 id="viewTitle">Daily</h2>
+                    <div class="toolbar-caption">Seguimiento semanal y comentarios rápidos por proyecto</div>
                 </div>
-                <div id="projectsListCompleted" class="projects-list expanded"></div>
+                <div class="view-toggle">
+                    <button class="active" onclick="switchView('daily')">📅 Daily</button>
+                    <button onclick="switchView('ficha')">📋 Ficha Proyecto</button>
+                    <button onclick="switchView('equipo')">👥 Equipo</button>
+                    <button onclick="switchView('dashboard')">📈Dashboard</button>
+                </div>
             </div>
-            <div class="sidebar-actions">
-                <button onclick="openNewProjectModal()" class="btn-new-project">➕ Nuevo Proyecto</button>
-                <button onclick="changeUser()" class="btn-change-user">👤 Usuario</button>
+
+            <!-- VISTA DAILY -->
+            <div id="dailyView" class="view active">
+                <div class="week-navigator">
+                    <button class="btn-week" onclick="changeWeek(-1)">← Semana anterior</button>
+                    <div class="week-display" id="weekDisplay"></div>
+                    <button class="btn-week" onclick="changeWeek(1)">Semana siguiente →</button>
+                </div>
+
+                <div class="daily-tabs">
+                    <button class="tab-btn active" onclick="filterDailyByPhase('all')">Activos</button>
+                    <button class="tab-btn" onclick="filterDailyByPhase('Cerrado')">Completados</button>
+                </div>
+
+                <div id="dailyContent"></div>
+
+                <button class="btn-add-daily" onclick="openNewDailyModal()">Nuevo comentario Daily</button>
             </div>
-            <div class="sidebar-footer">
-                <div id="currentUserDisplay" style="text-align: center; color: #666; font-size: 12px;"></div>
+
+            <!-- VISTA FICHA PROYECTO -->
+            <div id="fichaView" class="view">
+                <div class="ficha-container" id="fichaContainer">
+                    <p style="text-align:center; color:#999; margin-top:50px;">Selecciona un proyecto en la barra lateral</p>
+                </div>
             </div>
-        </aside>
-        <main class="main-content">
-            <nav class="navbar view-toggle">
-                <button class="view-btn active" onclick="switchView('dashboard')">📊 Dashboard</button>
-                <button class="view-btn" onclick="switchView('daily')">📋 Daily</button>
-                <button class="view-btn" onclick="switchView('equipo')">👥 Equipo</button>
-                <button class="view-btn" onclick="switchView('ficha')">📄 Ficha</button>
-            </nav>
-            <div class="views-container">
-                <div class="dashboard-view active"></div>
-                <div class="daily-view"></div>
-                <div class="team-view"></div>
-                <div class="project-ficha"></div>
+
+            <!-- VISTA EQUIPO -->
+            <div id="equipoView" class="view">
+                <div class="team-grid" id="teamGrid"></div>
             </div>
-        </main>
+
+            <!-- VISTA DASHBOARD -->
+            <div id="dashboardView" class="view">
+                <div class="dashboard-container">
+                    <div class="dashboard-card">
+                        <h3>📊 Métricas Generales</h3>
+                        <div id="generalMetrics"></div>
+                    </div>
+                    <div class="dashboard-card">
+                        <h3>📈 Proyectos por Fase</h3>
+                        <div id="projectsByPhase"></div>
+                    </div>
+                    <div class="dashboard-card">
+                        <h3>💰 Ahorro Total</h3>
+                        <div id="savingsMetrics"></div>
+                    </div>
+                    <div class="dashboard-card">
+                        <h3>🔥 Urgencias Activas</h3>
+                        <div id="urgentProjects"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Modal: Nuevo Proyecto -->
-    <div id="projectModal" class="modal">
+    <!-- MODAL NUEVO DAILY -->
+    <div id="newDailyModal" class="modal">
         <div class="modal-content">
-            <h2 class="modal-title">Nuevo Proyecto</h2>
-            <div class="form-group">
-                <label>Nombre</label>
-                <input type="text" id="projectName" placeholder="Nombre del proyecto">
+            <h3>Nuevo comentario Daily</h3>
+            <form id="newDailyForm">
+                <label>Proyecto</label>
+                <select id="dailyProjectSelect" required>
+                    <option value="">Selecciona un proyecto...</option>
+                </select>
+
+                <label>Responsable</label>
+                <select id="dailyResponsable" required>
+                    <option value="">Selecciona...</option>
+                    <option value="IS">IS</option>
+                    <option value="DH">DH</option>
+                    <option value="HR">HR</option>
+                    <option value="PU">PU</option>
+                    <option value="AR">AR</option>
+                    <option value="MR">MR</option>
+                </select>
+
+                <label>Urgencia</label>
+                <select id="dailyUrgency">
+                    <option value="Normal">Normal</option>
+                    <option value="Alta">Alta</option>
+                    <option value="Máxima">Máxima</option>
+                </select>
+
+                <label>
+                    <input type="checkbox" id="dailyIncidencia"> Tiene incidencia
+                </label>
+
+                <label>Comentario</label>
+                <textarea id="dailyComment" rows="4" required></textarea>
+
+                <div class="modal-actions">
+                    <button type="submit" class="btn-primary">Guardar</button>
+                    <button type="button" class="btn-secondary" onclick="closeNewDailyModal()">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL VER COMENTARIOS -->
+    <div id="viewCommentsModal" class="modal">
+        <div class="modal-content modal-wide">
+            <h3>Comentarios del día</h3>
+            <div id="commentsContainer"></div>
+            <div class="modal-actions">
+                <button class="btn-primary" onclick="openNewDailyModalFromView()">Añadir más</button>
+                <button class="btn-secondary" onclick="closeViewCommentsModal()">Cerrar</button>
             </div>
-            <div class="form-group">
-                <label>Fecha Inicio</label>
-                <input type="date" id="projectStartDate">
-            </div>
-            <div class="form-group">
-                <label>Fecha Fin</label>
-                <input type="date" id="projectEndDate">
-            </div>
-            <div class="form-group">
-                <label>Ahorro €</label>
-                <input type="number" id="volume" placeholder="0.00" step="0.01" min="0">
-            </div>
-            <div class="form-group">
-                <label>Ahorro FTE</label>
-                <input type="number" id="fte" placeholder="0.0" step="0.1" min="0">
-            </div>
-            <div class="form-group">
-                <label>Fase</label>
+        </div>
+    </div>
+
+    <!-- MODAL NUEVO PROYECTO -->
+    <div id="newProjectModal" class="modal">
+        <div class="modal-content">
+            <h3>Crear nuevo proyecto</h3>
+            <form id="newProjectForm">
+                <label>Nombre de la iniciativa</label>
+                <input type="text" id="projectName" required>
+
+                <label>Fecha inicio</label>
+                <input type="date" id="projectStartDate" required>
+
+                <label>Fecha fin</label>
+                <input type="date" id="projectEndDate" required>
+
+                <label>Fase del proyecto</label>
                 <select id="projectPhase">
                     <option value="Idea">Idea</option>
                     <option value="En Progreso">En Progreso</option>
                     <option value="On Hold">On Hold</option>
                     <option value="Cerrado">Cerrado</option>
                 </select>
-            </div>
-            <div class="form-group">
+
                 <label>Stakeholders</label>
-                <input type="text" id="projectStakeholders" placeholder="IS, DH, HR...">
-            </div>
-            <div class="modal-buttons">
-                <button class="btn btn-primary" onclick="saveNewProject()">Crear</button>
-                <button class="btn btn-cancel" onclick="closeProjectModal()">Cancelar</button>
-            </div>
+                <input type="text" id="projectStakeholders">
+
+                <label>Ahorro (€)</label>
+                <input type="number" id="projectSavingsEur" step="0.01">
+
+                <label>Ahorro (FTE)</label>
+                <input type="number" id="projectSavingsFTE" step="0.01">
+
+                <div class="modal-actions">
+                    <button type="submit" class="btn-primary">Crear proyecto</button>
+                    <button type="button" class="btn-secondary" onclick="closeNewProjectModal()">Cancelar</button>
+                </div>
+            </form>
         </div>
     </div>
 
-    <!-- Modal: Comentario Daily -->
-    <div id="dailyModal" class="modal">
-        <div class="modal-content">
-            <h2 id="dailyModalTitle" class="modal-title">Nuevo comentario Daily</h2>
-            <div class="form-group">
-                <label>Proyecto</label>
-                <select id="commentProjectSelect"></select>
-            </div>
-            <div class="form-group">
-                <label>Responsable</label>
-                <input type="text" id="commentResponsible" placeholder="Iniciales">
-            </div>
-            <div class="form-group">
-                <label>Urgencia</label>
-                <select id="commentUrgency">
-                    <option>Normal</option>
-                    <option>Alta</option>
-                    <option>Máxima</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" id="commentIncident"> Incidente
-                </label>
-            </div>
-            <div class="form-group">
-                <label>Comentario</label>
-                <textarea id="commentText" placeholder="Escribe aquí..."></textarea>
-            </div>
-            <div class="modal-buttons">
-                <button class="btn btn-primary" onclick="saveDailyComment()">Guardar</button>
-                <button class="btn btn-cancel" onclick="closeDailyModal()">Cancelar</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal: Lista de Comentarios -->
-    <div id="commentsListModal" class="modal">
-        <div class="modal-content">
-            <h2 class="modal-title">Comentarios</h2>
-            <div id="commentsListContainer"></div>
-            <div class="modal-buttons">
-                <button class="btn btn-primary" onclick="openAddCommentFromList()">➕ Añadir</button>
-                <button class="btn btn-cancel" onclick="closeCommentsListModal()">Cerrar</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal: Vacaciones -->
-    <div id="vacationModal" class="modal">
-        <div class="modal-content">
-            <h2 class="modal-title">Selecciona días de vacaciones</h2>
-            <div id="vacationCalendar" style="text-align: center; padding: 20px;"></div>
-            <div class="modal-buttons">
-                <button class="btn btn-primary" onclick="addVacationWithDateRange()">✅ Crear</button>
-                <button class="btn btn-cancel" onclick="closeVacationModal()">Cancelar</button>
-            </div>
-        </div>
-    </div>
-    
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script>
-// --- config.js ---
-const SUPABASE_URL = "https://snyvvbwkkqpecfcvvdid.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNueXZ2Yndra3FwZWNmY3Z2ZGlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjc3MDYsImV4cCI6MjA4NDYwMzcwNn0.szk1Do5oUAEg6zsqBGAIWC43zULtB1rDtmF8O9i2i9s";
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const STANDARD_PREREQUISITES = [
-    "Business Case",
-    "Stakeholders",
-    "Cálculo de Ahorros",
-    "Aprobaciones",
-    "Project Plan",
-    "Comunicaciones",
-    "Traspaso a BAU"
-];
-// --- app.js ---
-// ...existing app.js code...
-    </script>
+    <script src="config.js"></script>
+    <script src="app.js"></script>
 </body>
+
 </html>
