@@ -4,7 +4,98 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestor de Proyectos</title>
-    <link rel="stylesheet" href="styles.css">
+    <style>
+/* --- styles.css --- */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+:root {
+    --color-background: #f5f3f8;
+    --color-surface: #ffffff;
+    --color-text: #221933;
+    --color-text-secondary: #6b607d;
+    --color-primary: #7a1ea2;
+    --color-primary-hover: #5c177a;
+    --color-success: #00a58c;
+    --color-warning: #ffb547;
+    --color-danger: #d32f2f;
+    --color-border: #e0d6ec;
+    --color-day-light: #efe2ff;
+    --color-checkbox-bg: #f4eefb;
+    --shadow-soft: 0 4px 16px rgba(14, 0, 40, 0.08);
+}
+.body,
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: radial-gradient(circle at top left, #d6b6f7 0, #f2ebff 40%, #f5f3f8 100%) !important;
+    color: var(--color-text);
+    line-height: 1.5;
+}
+.app-container {
+    background: radial-gradient(circle at top left, #d6b6f7 0, #f2ebff 40%, #f5f3f8 100%) !important;
+}
+.app-container {
+    display: flex;
+    min-height: 100vh;
+    background: radial-gradient(circle at top left, #d6b6f7 0, #f2ebff 40%, #f5f3f8 100%);
+    gap: 0;
+}
+.sidebar {
+    width: 240px;
+    background: linear-gradient(180deg, #2a1b4a 0%, #321d57 40%, #3a1f63 100%);
+    color: #f8f4ff;
+    padding: 22px 18px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-soft);
+    position: relative;
+}
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-soft);
+    padding: 0;
+    min-width: 0;
+    border-radius: 16px;
+    margin: 18px 18px 18px 0;
+    overflow: hidden;
+}
+.views-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+    background: var(--color-background);
+    border-radius: 12px;
+    box-shadow: var(--shadow-soft);
+    margin: 0;
+    min-width: 0;
+}
+.dashboard-view,
+.daily-view,
+.team-view,
+.project-ficha {
+    width: 100%;
+    min-height: 400px;
+    background: var(--color-surface);
+    border-radius: 12px;
+    box-shadow: var(--shadow-soft);
+    padding: 24px;
+    margin-bottom: 24px;
+    display: none;
+}
+.dashboard-view.active,
+.daily-view.active,
+.team-view.active,
+.project-ficha.active {
+    display: block;
+}
+/* ...resto de estilos... */
+    </style>
 </head>
 <body>
     <div class="app-container">
@@ -155,7 +246,22 @@
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="config.js"></script>
-    <script src="app.js"></script>
+    <script>
+// --- config.js ---
+const SUPABASE_URL = "https://snyvvbwkkqpecfcvvdid.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNueXZ2Yndra3FwZWNmY3Z2ZGlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjc3MDYsImV4cCI6MjA4NDYwMzcwNn0.szk1Do5oUAEg6zsqBGAIWC43zULtB1rDtmF8O9i2i9s";
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const STANDARD_PREREQUISITES = [
+    "Business Case",
+    "Stakeholders",
+    "Cálculo de Ahorros",
+    "Aprobaciones",
+    "Project Plan",
+    "Comunicaciones",
+    "Traspaso a BAU"
+];
+// --- app.js ---
+// ...existing app.js code...
+    </script>
 </body>
 </html>
