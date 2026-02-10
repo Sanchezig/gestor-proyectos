@@ -2359,11 +2359,11 @@
 }
 
 .dashboard-view {
-    display: none !important;
+    display: none;
 }
 
 .dashboard-view.active {
-    display: block !important;
+    display: block;
 }
 
 
