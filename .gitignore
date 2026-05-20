@@ -1,0 +1,6 @@
+app.js.bak
+PROD - Gestor Proyectos.html
+node_modules/
+.env
+.DS_Store
+*.log
