@@ -3049,3 +3049,49 @@
     font-size: 12px !important;
   }
 }
+
+/* Last Status widget: authoritative styles matching app.js classes */
+.right-sidebar .capacity-widget-header {
+        margin-bottom: 12px;
+}
+
+.right-sidebar .capacity-widget-title {
+        font-size: 15px;
+        font-weight: 700;
+        margin-bottom: 0;
+        padding-bottom: 8px;
+        border-bottom: 2px solid var(--color-primary);
+        color: #2a1b4a;
+        letter-spacing: 0.3px;
+}
+
+.right-sidebar .current-status-highlight {
+        background: #fff;
+        border: 1px solid #7a1ea2;
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 12px;
+        box-shadow: 0 4px 10px rgba(122, 30, 162, 0.08);
+}
+
+.right-sidebar .status-history-container {
+        max-height: 150px;
+        overflow-y: auto;
+        margin-bottom: 12px;
+        padding: 10px 5px 0 0;
+        border-top: 1px solid #eee;
+        background: #fbf9ff;
+        border-radius: 6px;
+}
+
+.right-sidebar .status-history-container .history-item {
+        padding: 8px 10px;
+        border-bottom: 1px solid #e0d6ec;
+        margin-bottom: 4px;
+        font-size: 11px;
+}
+
+.right-sidebar .status-history-container .history-item:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+}
