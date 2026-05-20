@@ -2020,9 +2020,7 @@ function renderLastStatusWidget() {
     </div>
 `;
 
-            // Wrap content in flex container for proper alignment
-            const wrappedHtml = `<div class="ficha-main">${html}</div>${rightSidebarHtml}`;
-            document.getElementById('fichaView').innerHTML = wrappedHtml;
+document.getElementById('fichaView').innerHTML = html + rightSidebarHtml;
 
 
         }
