@@ -759,10 +759,12 @@
             align-items: flex-start;
             gap: 20px;
             position: relative;
+            flex-wrap: nowrap;
         }
 
         .ficha-main {
-            flex: 1;
+            flex: 0 1 auto;
+            min-width: 0;
         }
 
         .ficha-header {
