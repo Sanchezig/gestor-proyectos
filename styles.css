@@ -754,6 +754,17 @@
             display: block;
         }
 
+        #fichaView {
+            display: flex;
+            align-items: flex-end;
+            gap: 20px;
+            position: relative;
+        }
+
+        .ficha-main {
+            flex: 1;
+        }
+
         .ficha-header {
             background: var(--color-surface);
             padding: 20px;
@@ -1821,15 +1832,13 @@
 
 
         .right-sidebar {
-            position: absolute;
-            top: 0;
-            left: 100%;
-            margin-left: 20px;
+            position: static;
             width: 320px;
             display: flex;
             flex-direction: column;
             gap: 20px;
             z-index: 10;
+            flex-shrink: 0;
         }
 
         .ficha-container {
@@ -2214,15 +2223,13 @@
         }
 
         .right-sidebar {
-            position: absolute;
-            top: 0;
-            left: 100%;
-            margin-left: 20px;
+            position: static;
             width: 320px;
             display: flex;
             flex-direction: column;
             gap: 20px;
             z-index: 10;
+            flex-shrink: 0;
         }
 
         .ficha-container {
