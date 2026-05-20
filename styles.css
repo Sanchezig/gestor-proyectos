@@ -1,4 +1,4 @@
-        * {
+* {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
@@ -1837,105 +1837,26 @@
         }
 
         .widget-box {
-    background: #ffffff !important;
-    border-radius: 12px;
-    box-shadow: 0 4px 16px rgba(14, 0, 40, 0.08);
-    border: 1px solid #e0d6ec;
-    padding: 16px;
-    width: 100%;
-    display: flex; /* Cambiar de block a flex para manejar alturas internas */
-    flex-direction: column;
-    /* Eliminar altura fija si la hubiera, o poner min-height */
-}
-		
-		/* --- ESTILOS PARA EL HISTORIAL DE ESTADOS --- */
-
-/* 1. Contenedor del historial antiguo (con scroll) */
-.status-history-container {
-    max-height: 150px;         /* Altura máxima fija */
-    overflow-y: auto;          /* Scroll vertical */
-    margin-bottom: 15px;
-    padding-right: 5px;
-    border-top: 1px solid #eee;
-    padding-top: 10px;
-    background-color: #fbf9ff; /* Fondo muy suave */
-    border-radius: 6px;
-}
-
-/* Scrollbar fino y elegante */
-.status-history-container::-webkit-scrollbar {
-    width: 5px;
-}
-.status-history-container::-webkit-scrollbar-thumb {
-    background: #d1c4e9;
-    border-radius: 3px;
-}
-
-/* 2. Estilo para el Estado ACTUAL (el de arriba) */
-.current-status-highlight {
-    background-color: #fff;
-    border: 1px solid #7a1ea2; /* Borde morado destacado */
-    padding: 12px;
-    border-radius: 8px;
-    margin-bottom: 12px;
-    box-shadow: 0 4px 10px rgba(122, 30, 162, 0.08);
-    position: relative;
-}
-.current-status-highlight .status-content {
-    text-indent: 0 !important;
-    padding-left: 0 !important;
-    margin-left: 0 !important;
-}
-
-
-
-/* 3. Items del historial */
-.history-item {
-    padding: 8px 10px;
-    border-bottom: 1px solid #e0d6ec;
-    margin-bottom: 4px;
-    font-size: 11px;
-}
-.history-item:last-child {
-    border-bottom: none;
-}
-
-
-
-        .status-input-area textarea {
-            width: 100%;
-            height: 60px;
-            padding: 8px;
-            border-radius: 6px;
-            border: 1px solid var(--color-border);
-            font-size: 12px;
-            resize: none;
-            margin-bottom: 6px;
-            font-family: inherit;
             background: #ffffff;
-        }
-
-        .btn-save-status {
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(14, 0, 40, 0.08);
+            border: 1px solid #e0d6ec;
+            padding: 16px;
             width: 100%;
-            background: var(--color-primary);
-            color: white;
-            border: none;
-            padding: 6px;
-            border-radius: 6px;
-            font-size: 11px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 140ms ease;
+            display: flex;
+            flex-direction: column;
         }
 
-        .btn-save-status:hover {
-            background: var(--color-primary-hover);
+        .widget-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #f0f0f0;
         }
 
-
-
-
-        .capacity-widget-title {
+        .widget-title {
             font-size: 13px;
             font-weight: 700;
             color: #2a1b4a;
