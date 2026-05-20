@@ -1821,19 +1821,21 @@
 
 
         .right-sidebar {
-            position: relative;
+            position: absolute;
+            bottom: 0;
+            left: 100%;
+            margin-left: 20px;
             width: 320px;
             display: flex;
             flex-direction: column;
             gap: 20px;
             z-index: 10;
-            flex-shrink: 0;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
         }
 
         .ficha-container {
-            display: flex;
-            gap: 20px;
-            align-items: flex-end;
+            display: none;
         }
 
         .widget-box {
@@ -2214,19 +2216,19 @@
         }
 
         .right-sidebar {
-            position: relative;
+            position: absolute;
+            bottom: 0;
+            left: 100%;
+            margin-left: 20px;
             width: 320px;
             display: flex;
             flex-direction: column;
             gap: 20px;
             z-index: 10;
-            flex-shrink: 0;
         }
 
         .ficha-container {
-            display: flex;
-            gap: 20px;
-            align-items: flex-end;
+            display: none;
         }
 
         .widget-box {
