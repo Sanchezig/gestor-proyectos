@@ -1821,19 +1821,20 @@
 
 
         .right-sidebar {
-    position: absolute;
-    top: 0;
-    left: 100%;
-    margin-left: 20px;
-    width: 320px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    z-index: 10;
-    /* IMPORTANTE: Asegurar altura máxima si quieres que el scroll funcione dentro de los widgets */
-    max-height: calc(100vh - 40px); 
-    overflow-y: auto; /* Scroll para la barra lateral completa si es muy alta */
-}
+            position: relative;
+            width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            z-index: 10;
+            flex-shrink: 0;
+        }
+
+        .ficha-container {
+            display: flex;
+            gap: 20px;
+            align-items: flex-end;
+        }
 
         .widget-box {
     background: #ffffff !important;
@@ -2213,15 +2214,19 @@
         }
 
         .right-sidebar {
-            position: absolute;
-            top: 0;
-            left: 100%;
-            margin-left: 20px;
+            position: relative;
             width: 320px;
             display: flex;
             flex-direction: column;
             gap: 20px;
             z-index: 10;
+            flex-shrink: 0;
+        }
+
+        .ficha-container {
+            display: flex;
+            gap: 20px;
+            align-items: flex-end;
         }
 
         .widget-box {
@@ -2231,7 +2236,8 @@
             border: 1px solid #e0d6ec;
             padding: 16px;
             width: 100%;
-            display: block;
+            display: flex;
+            flex-direction: column;
         }
 
         .widget-header {
