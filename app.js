@@ -78,6 +78,8 @@ function handlePrereqClick(event, projectId, prereqName) {
         let projectStatuses = [];
         let currentUser = null; // valor inicial por defecto
         const APP_LOGIN_PASSWORD = 'admin123';
+        const APP_LOGIN_STORAGE_KEY = 'wtw_login_session_v1';
+        const APP_LOGIN_EXPIRY_DAYS = 30;
         let appInitialized = false;
 
 
@@ -3371,6 +3373,38 @@ function sortDailyProjects(projects) {
             await init();
         }
 
+        function hasValidLoginSession() {
+            try {
+                const raw = localStorage.getItem(APP_LOGIN_STORAGE_KEY);
+                if (!raw) return false;
+
+                const parsed = JSON.parse(raw);
+                const expiresAt = Number(parsed && parsed.expiresAt);
+                if (!expiresAt || Date.now() > expiresAt) {
+                    localStorage.removeItem(APP_LOGIN_STORAGE_KEY);
+                    return false;
+                }
+
+                return true;
+            } catch {
+                return false;
+            }
+        }
+
+        function persistLoginSession() {
+            try {
+                const ttlMs = APP_LOGIN_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+                const payload = {
+                    createdAt: Date.now(),
+                    expiresAt: Date.now() + ttlMs
+                };
+
+                localStorage.setItem(APP_LOGIN_STORAGE_KEY, JSON.stringify(payload));
+            } catch {
+                // Si el navegador bloquea storage, simplemente pedirá login en cada carga.
+            }
+        }
+
         async function handleLoginAttempt() {
             const passwordInput = document.getElementById('loginPassword');
             const loginButton = document.getElementById('loginButton');
@@ -3386,6 +3420,7 @@ function sortDailyProjects(projects) {
             }
 
             loginError.textContent = '';
+            persistLoginSession();
             loginButton.disabled = true;
             loginButton.textContent = 'Entrando...';
 
@@ -3403,6 +3438,11 @@ function sortDailyProjects(projects) {
 
             if (!loginScreen || !appShell) {
                 void init();
+                return;
+            }
+
+            if (hasValidLoginSession()) {
+                void enterApplication();
                 return;
             }
 
