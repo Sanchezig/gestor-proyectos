@@ -11,6 +11,22 @@
 </head>
 
 <body>
+    <div class="login-screen" id="loginScreen">
+        <div class="login-card">
+            <img src="logo%202.png?v=20260521" alt="P&OI" class="login-logo" onerror="this.style.display='none';this.nextElementSibling.style.display='block';">
+            <div class="login-logo-fallback" style="display:none;">P&amp;OI</div>
+            <h1 class="login-title">Gestor de Proyectos</h1>
+            <p class="login-subtitle">Introduce la contraseña para acceder</p>
+
+            <div class="login-form">
+                <input type="password" id="loginPassword" class="login-input" placeholder="Contraseña" autocomplete="current-password">
+                <button class="login-button" id="loginButton" type="button">Entrar</button>
+                <div class="login-error" id="loginError" aria-live="polite"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="appShell" class="app-shell app-shell--hidden">
     <div class="container">
         <div class="sidebar">
             <div class="sidebar-logo">WTW</div>
@@ -173,6 +189,7 @@
                 <button class="btn btn-cancel" onclick="closeProjectModal()">Cancelar</button>
             </div>
         </div>
+    </div>
     </div>
 
     <script src="config.js"></script>

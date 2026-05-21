@@ -77,6 +77,8 @@ function handlePrereqClick(event, projectId, prereqName) {
 
         let projectStatuses = [];
         let currentUser = null; // valor inicial por defecto
+        const APP_LOGIN_PASSWORD = 'admin123';
+        let appInitialized = false;
 
 
         // =====================================================
@@ -3351,6 +3353,80 @@ function sortDailyProjects(projects) {
             await loadDataFromSupabase();
         }
 
+        async function enterApplication() {
+            if (appInitialized) return;
+            appInitialized = true;
+
+            const loginScreen = document.getElementById('loginScreen');
+            const appShell = document.getElementById('appShell');
+
+            if (appShell) {
+                appShell.classList.remove('app-shell--hidden');
+            }
+
+            if (loginScreen) {
+                loginScreen.style.display = 'none';
+            }
+
+            await init();
+        }
+
+        async function handleLoginAttempt() {
+            const passwordInput = document.getElementById('loginPassword');
+            const loginButton = document.getElementById('loginButton');
+            const loginError = document.getElementById('loginError');
+            if (!passwordInput || !loginButton || !loginError) return;
+
+            const enteredPassword = passwordInput.value || '';
+            if (enteredPassword !== APP_LOGIN_PASSWORD) {
+                loginError.textContent = 'Contraseña incorrecta.';
+                passwordInput.focus();
+                passwordInput.select();
+                return;
+            }
+
+            loginError.textContent = '';
+            loginButton.disabled = true;
+            loginButton.textContent = 'Entrando...';
+
+            try {
+                await enterApplication();
+            } finally {
+                loginButton.disabled = false;
+                loginButton.textContent = 'Entrar';
+            }
+        }
+
+        function setupLoginScreen() {
+            const loginScreen = document.getElementById('loginScreen');
+            const appShell = document.getElementById('appShell');
+
+            if (!loginScreen || !appShell) {
+                void init();
+                return;
+            }
+
+            const loginButton = document.getElementById('loginButton');
+            const passwordInput = document.getElementById('loginPassword');
+
+            if (loginButton) {
+                loginButton.addEventListener('click', () => {
+                    void handleLoginAttempt();
+                });
+            }
+
+            if (passwordInput) {
+                passwordInput.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        void handleLoginAttempt();
+                    }
+                });
+
+                setTimeout(() => passwordInput.focus(), 0);
+            }
+        }
+
         function setupSidebarHeaders() {
             const activosTitle = document.querySelector('.sidebar-title:nth-of-type(1)');
             const completadosTitle = document.querySelector('.sidebar-title:nth-of-type(2)');
@@ -3380,5 +3456,5 @@ function sortDailyProjects(projects) {
             }
         }
 
-        window.addEventListener('load', init);
+        window.addEventListener('load', setupLoginScreen);
         window.addEventListener('resize', () => requestAnimationFrame(syncSidebarListHeights));
