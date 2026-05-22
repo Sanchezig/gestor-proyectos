@@ -76,6 +76,11 @@ function handlePrereqClick(event, projectId, prereqName) {
         // ];
 
         let projectStatuses = [];
+        let projectNotes = [];
+        let projectNoteEditorState = {
+            isOpen: false,
+            editNoteId: null
+        };
         let currentUser = null; // valor inicial por defecto
         const APP_LOGIN_PASSWORD = 'admin123';
         const APP_LOGIN_STORAGE_KEY = 'wtw_login_session_v1';
@@ -105,6 +110,18 @@ function handlePrereqClick(event, projectId, prereqName) {
                 "'": '&#39;'
             };
             return String(text).replace(/[&<>"']/g, char => map[char]);
+        }
+
+        function formatSupabaseError(error, fallbackMessage) {
+            if (!error) return fallbackMessage || 'Error desconocido';
+
+            const parts = [error.message, error.details, error.hint]
+                .filter(Boolean)
+                .map(p => String(p).trim())
+                .filter(Boolean);
+
+            if (parts.length > 0) return parts.join(' | ');
+            return fallbackMessage || 'Error desconocido';
         }
 
         function getStatusIcon(status) {
@@ -196,7 +213,28 @@ function handlePrereqClick(event, projectId, prereqName) {
         let teamVacations = [];
         let selectedVacationDays = []; // Rastrear días seleccionados para vacaciones
         let currentMonth = new Date();
-        const teamMembers = ['IS', 'DH', 'HR', 'PU', 'AR', 'MR', 'AP']; // Ajusta según tu equipo
+        const teamMembers = ['IS', 'HR', 'PU', 'AR', 'MR', 'AP']; // Ajusta según tu equipo
+        const excludedResponsibles = ['DH'];
+
+        function isExcludedResponsible(value) {
+            return excludedResponsibles.includes((value || '').trim().toUpperCase());
+        }
+
+        function sanitizeResponsiblesList(value) {
+            const source = Array.isArray(value) ? value : [];
+            const unique = [];
+            const seen = new Set();
+
+            source.forEach(item => {
+                const normalized = (item || '').trim().toUpperCase();
+                if (!normalized || isExcludedResponsible(normalized) || seen.has(normalized)) return;
+                seen.add(normalized);
+                unique.push(normalized);
+            });
+
+            return unique;
+        }
+
         let currentProjectId = null;
         let currentWeekStart = getMonday(new Date());
         let editingCommentId = null;
@@ -221,7 +259,7 @@ function handlePrereqClick(event, projectId, prereqName) {
                 const exists = teamMembers.includes(previousValue);
                 if (exists) {
                     responsibleSelect.value = previousValue;
-                } else {
+                } else if (!isExcludedResponsible(previousValue)) {
                     const customOption = document.createElement('option');
                     customOption.value = previousValue;
                     customOption.textContent = previousValue;
@@ -1339,8 +1377,9 @@ case "phase":
                     project.fte = fteVal;  // Actualización local (lo que ves en consola)
                     break;
                 case 'responsibles':
-                    update.responsibles = value;
-                    project.responsibles = value;
+                    const cleanedResponsibles = sanitizeResponsiblesList(value);
+                    update.responsibles = cleanedResponsibles;
+                    project.responsibles = cleanedResponsibles;
                     break;
 
 
@@ -1454,10 +1493,10 @@ function renderCapacityWidget() {
         <div class="capacity-weeks-container">`;
 
             // Semana actual
-            html += renderWeekBlock(week1Start, 'Semana Actual');
+            html += renderWeekBlock(week1Start, 'Actual');
 
             // Semana siguiente
-            html += renderWeekBlock(week2Start, 'Semana Siguiente');
+            html += renderWeekBlock(week2Start, 'Siguiente');
 
             html += `</div></div>`;
             return html;
@@ -1598,6 +1637,31 @@ function renderCapacityWidget() {
     }));
 }
 
+        async function loadProjectNotes() {
+    const { data, error } = await supabaseClient
+        .from('project_notes')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error cargando notas:', formatSupabaseError(error, 'No se pudieron cargar notas'));
+        projectNotes = [];
+        return;
+    }
+
+    projectNotes = (data || []).map(n => ({
+        id: n.id,
+        projectId: n.project_id,
+        title: n.title || '',
+        body: n.body || '',
+        url: n.url || '',
+        color: n.color || 'yellow',
+        createdBy: n.created_by || 'US',
+        createdAt: n.created_at,
+        updatedAt: n.updated_at || n.created_at
+    }));
+}
+
 
         // Función para pintar el widget con Historial y Scroll
 function renderLastStatusWidget() {
@@ -1711,6 +1775,198 @@ function renderLastStatusWidget() {
 
     if (textarea) textarea.value = '';
     renderFicha();
+}
+
+        function openProjectNoteEditor(noteId = null) {
+    projectNoteEditorState.isOpen = true;
+    projectNoteEditorState.editNoteId = noteId;
+    renderFicha();
+}
+
+        function closeProjectNoteEditor() {
+    projectNoteEditorState.isOpen = false;
+    projectNoteEditorState.editNoteId = null;
+    renderFicha();
+}
+
+        function getProjectNotesByCurrentProject() {
+    return (projectNotes || [])
+        .filter(n => n.projectId === currentProjectId)
+        .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+}
+
+        async function saveProjectNote() {
+    if (!currentProjectId) return;
+
+    const titleEl = document.getElementById('projectNoteTitle');
+    const bodyEl = document.getElementById('projectNoteBody');
+    const urlEl = document.getElementById('projectNoteUrl');
+    const colorEl = document.getElementById('projectNoteColor');
+
+    const title = titleEl ? titleEl.value.trim() : '';
+    const body = bodyEl ? bodyEl.value.trim() : '';
+    const rawUrl = urlEl ? urlEl.value.trim() : '';
+    const color = colorEl ? colorEl.value : 'yellow';
+
+    if (!title && !body && !rawUrl) {
+        alert('Añade al menos título, contenido o URL.');
+        return;
+    }
+
+    const normalizedUrl = normalizeDocumentationUrl(rawUrl);
+    if (normalizedUrl === null) {
+        alert('URL inválida. Usa una URL http(s) válida.');
+        return;
+    }
+
+    const nowIso = new Date().toISOString();
+    const editId = projectNoteEditorState.editNoteId;
+
+    if (editId) {
+        const payload = {
+            title,
+            body,
+            url: normalizedUrl || null,
+            color,
+            updated_at: nowIso
+        };
+
+        const { error } = await supabaseClient
+            .from('project_notes')
+            .update(payload)
+            .eq('id', editId);
+
+        if (error) {
+            const details = formatSupabaseError(error, 'No se pudo actualizar la nota');
+            console.error('Error actualizando nota:', details);
+            alert('Error actualizando nota: ' + details);
+            return;
+        }
+    } else {
+        const payload = {
+            id: generateId(),
+            project_id: currentProjectId,
+            title,
+            body,
+            url: normalizedUrl || null,
+            color,
+            created_by: currentUser || 'US',
+            created_at: nowIso,
+            updated_at: nowIso
+        };
+
+        const { error } = await supabaseClient
+            .from('project_notes')
+            .insert(payload);
+
+        if (error) {
+            const details = formatSupabaseError(error, 'No se pudo guardar la nota');
+            console.error('Error guardando nota:', details);
+            alert('Error guardando nota: ' + details);
+            return;
+        }
+    }
+
+    projectNoteEditorState.isOpen = false;
+    projectNoteEditorState.editNoteId = null;
+    await loadProjectNotes();
+    renderFicha();
+}
+
+        async function deleteProjectNote(noteId) {
+    const confirmDelete = confirm('¿Eliminar esta nota?');
+    if (!confirmDelete) return;
+
+    const { error } = await supabaseClient
+        .from('project_notes')
+        .delete()
+        .eq('id', noteId);
+
+    if (error) {
+        const details = formatSupabaseError(error, 'No se pudo eliminar la nota');
+        console.error('Error eliminando nota:', details);
+        alert('Error eliminando nota: ' + details);
+        return;
+    }
+
+    if (projectNoteEditorState.editNoteId === noteId) {
+        projectNoteEditorState.editNoteId = null;
+        projectNoteEditorState.isOpen = false;
+    }
+
+    await loadProjectNotes();
+    renderFicha();
+}
+
+        function renderProjectNotesWidget() {
+    if (!currentProjectId) return '';
+
+    const notes = getProjectNotesByCurrentProject();
+    const editingNote = projectNoteEditorState.editNoteId
+        ? notes.find(n => n.id === projectNoteEditorState.editNoteId)
+        : null;
+
+    const noteTitle = editingNote ? editingNote.title : '';
+    const noteBody = editingNote ? editingNote.body : '';
+    const noteUrl = editingNote ? editingNote.url : '';
+    const noteColor = editingNote ? (editingNote.color || 'yellow') : 'yellow';
+
+    let html = `<div class="widget-box project-notes-widget">
+        <div class="widget-header notes-widget-header">
+            <div class="widget-title">Notas del Proyecto</div>
+            <button class="notes-add-btn" onclick="openProjectNoteEditor()" title="Nueva nota">+</button>
+        </div>`;
+
+    if (projectNoteEditorState.isOpen) {
+        html += `
+        <div class="project-note-editor">
+            <input id="projectNoteTitle" type="text" maxlength="120" placeholder="Titulo breve" value="${escapeHtml(noteTitle)}">
+            <textarea id="projectNoteBody" placeholder="Info general, contexto, enlaces, pendientes...">${escapeHtml(noteBody)}</textarea>
+            <input id="projectNoteUrl" type="text" placeholder="https://... (opcional)" value="${escapeHtml(noteUrl)}">
+            <div class="project-note-editor-row">
+                <select id="projectNoteColor">
+                    <option value="yellow" ${noteColor === 'yellow' ? 'selected' : ''}>Amarillo</option>
+                    <option value="mint" ${noteColor === 'mint' ? 'selected' : ''}>Menta</option>
+                    <option value="salmon" ${noteColor === 'salmon' ? 'selected' : ''}>Salmon</option>
+                    <option value="sky" ${noteColor === 'sky' ? 'selected' : ''}>Cielo</option>
+                </select>
+                <button class="btn-save-note" onclick="saveProjectNote()">Guardar</button>
+                <button class="btn-cancel-note" onclick="closeProjectNoteEditor()">Cancelar</button>
+            </div>
+        </div>`;
+    }
+
+    if (!notes.length) {
+        html += `<div class="empty-state" style="margin-top: 8px;">Sin notas todavía. Pulsa + para crear la primera.</div>`;
+        html += `</div>`;
+        return html;
+    }
+
+    html += `<div class="project-notes-list">`;
+
+    notes.forEach(note => {
+        const updatedDate = note.updatedAt ? new Date(note.updatedAt) : null;
+        const dateText = updatedDate
+            ? updatedDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })
+            : '';
+
+        html += `
+        <article class="project-note-card note-color-${escapeHtml(note.color || 'yellow')}">
+            <div class="project-note-card-header">
+                <div class="project-note-title">${escapeHtml(note.title || 'Nota rápida')}</div>
+                <div class="project-note-actions">
+                    <button onclick="openProjectNoteEditor('${note.id}')" title="Editar">Editar</button>
+                    <button onclick="deleteProjectNote('${note.id}')" title="Eliminar">X</button>
+                </div>
+            </div>
+            ${note.body ? `<div class="project-note-body">${escapeHtml(note.body).replace(/\n/g, '<br>')}</div>` : ''}
+            ${note.url ? `<a class="project-note-link" href="${escapeHtml(note.url)}" target="_blank" rel="noopener noreferrer">Abrir enlace</a>` : ''}
+            <div class="project-note-meta">${dateText}${note.createdBy ? ` | ${escapeHtml(note.createdBy)}` : ''}</div>
+        </article>`;
+    });
+
+    html += `</div></div>`;
+    return html;
 }
 
 
@@ -2019,8 +2275,13 @@ function renderLastStatusWidget() {
 
             let rightSidebarHtml = `
     <div class="right-sidebar">
-        ${renderCapacityWidget()}
-        ${renderLastStatusWidget()}
+        <div class="right-sidebar-top-row">
+            <div class="right-sidebar-col">${renderCapacityWidget()}</div>
+            <div class="right-sidebar-col">${renderProjectNotesWidget()}</div>
+        </div>
+        <div class="right-sidebar-bottom-row">
+            <div class="right-sidebar-col">${renderLastStatusWidget()}</div>
+        </div>
     </div>
 `;
 
@@ -2325,8 +2586,8 @@ function renderDashboard() {
                 <thead>
                     <tr>
                         <th>Usuario</th>
-                        <th class="dash-num-center">Semana Actual</th>
-                        <th class="dash-num-center">Próxima Semana</th>
+                        <th class="dash-num-center">Actual</th>
+                        <th class="dash-num-center">Siguiente</th>
                     </tr>
                 </thead>
                 <tbody>`;
@@ -2696,6 +2957,7 @@ function sortDailyProjects(projects) {
         async function loadDataFromSupabase(skipRender = false) {
             await loadCapacities();
             await loadProjectStatuses();
+            await loadProjectNotes();
             const { data: projData, error: projError } = await supabaseClient
                 .from('projects')
                 .select('*')
@@ -2733,9 +2995,35 @@ function sortDailyProjects(projects) {
                 status: p.status || "Verde",
                 progress: p.progress || 0,
                 fte: p.fte,
-                responsibles: p.responsibles || [],
+                responsibles: sanitizeResponsiblesList(p.responsibles),
                 createdAt: p.created_at
             }));
+
+            const projectsWithExcludedResponsibles = (projData || [])
+                .map(p => {
+                    const cleaned = sanitizeResponsiblesList(p.responsibles);
+                    const original = Array.isArray(p.responsibles)
+                        ? p.responsibles.map(item => (item || '').trim().toUpperCase()).filter(Boolean)
+                        : [];
+
+                    const hasChanges = cleaned.length !== original.length ||
+                        cleaned.some((item, idx) => item !== original[idx]);
+
+                    if (!hasChanges) return null;
+                    return { id: p.id, responsibles: cleaned };
+                })
+                .filter(Boolean);
+
+            if (projectsWithExcludedResponsibles.length > 0) {
+                await Promise.all(
+                    projectsWithExcludedResponsibles.map(item =>
+                        supabaseClient
+                            .from('projects')
+                            .update({ responsibles: item.responsibles })
+                            .eq('id', item.id)
+                    )
+                );
+            }
 
 
 
@@ -2774,6 +3062,7 @@ function sortDailyProjects(projects) {
 
         let projectsChannel = supabaseClient.channel('projects-changes');
         let commentsChannel = supabaseClient.channel('comments-changes');
+        let notesChannel = supabaseClient.channel('notes-changes');
 
         projectsChannel
             .on('postgres_changes',
@@ -2790,6 +3079,15 @@ function sortDailyProjects(projects) {
                 { event: '*', schema: 'public', table: 'daily_comments' },
                 async (payload) => {
                     // console.log('Comentario nuevo/editado:', payload.new);
+                    await loadDataFromSupabase();
+                }
+            )
+            .subscribe();
+
+        notesChannel
+            .on('postgres_changes',
+                { event: '*', schema: 'public', table: 'project_notes' },
+                async () => {
                     await loadDataFromSupabase();
                 }
             )
@@ -3269,7 +3567,7 @@ function sortDailyProjects(projects) {
 
 
         function changeUser() {
-            const newUser = prompt('Introduce tus iniciales (ej: IS, DH, HR...)', currentUser);
+            const newUser = prompt('Introduce tus iniciales (ej: IS, MR, HR...)', currentUser);
             if (newUser && newUser.trim()) {
                 currentUser = newUser.trim().toUpperCase();
                 localStorage.setItem('wtw_current_user', currentUser);
@@ -3302,7 +3600,7 @@ function sortDailyProjects(projects) {
                 currentUser = savedUser;
             } else {
                 // Si es la primera vez, solicitar iniciales
-                const newUser = prompt('👋 Bienvenido/a al gestor WTW\\n\\nIntroduce tus iniciales (ej: IS, DH, HR...)');
+                const newUser = prompt('👋 Bienvenido/a al gestor WTW\\n\\nIntroduce tus iniciales (ej: IS, MR, HR...)');
 
                 if (newUser && newUser.trim()) {
                     currentUser = newUser.trim().toUpperCase();

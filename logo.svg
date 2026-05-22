@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="110" viewBox="0 0 420 110" role="img" aria-labelledby="title desc">
+  <title id="title">P&OI</title>
+  <desc id="desc">Logo P and OI in purple</desc>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7a1ea2"/>
+      <stop offset="100%" stop-color="#5f1680"/>
+    </linearGradient>
+  </defs>
+
+  <g fill="url(#g)">
+    <path d="M22 16h38c18 0 30 10 30 26s-12 26-30 26H48v26H22V16zm26 20v22h11c8 0 13-4 13-11s-5-11-13-11H48z"/>
+    <path d="M108 80c0-8 6-14 14-14s14 6 14 14-6 14-14 14-14-6-14-14z"/>
+    <path d="M178 16c23 0 41 17 41 39s-18 39-41 39-41-17-41-39 18-39 41-39zm0 18c-13 0-23 9-23 21s10 21 23 21 23-9 23-21-10-21-23-21z"/>
+    <path d="M241 16h27v78h-27V16z"/>
+    <path d="M289 16h27v78h-27V16z"/>
+  </g>
+</svg>
