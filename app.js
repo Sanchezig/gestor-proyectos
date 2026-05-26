@@ -1437,6 +1437,20 @@ function handleProgressWheel(event, projectId, currentValue) {
     updateProjectProgress(projectId, newValue);
 }
 
+function handleCapacityWheel(event, userInitials, weekKey, currentValue) {
+    event.preventDefault();
+
+    const delta = event.deltaY < 0 ? 5 : -5;
+    let value = parseInt(currentValue, 10);
+    if (isNaN(value)) value = 0;
+
+    let newValue = value + delta;
+    if (newValue < 0) newValue = 0;
+    if (newValue > 100) newValue = 100;
+
+    updateCapacity(userInitials, weekKey, newValue);
+}
+
 
 // =====================================================
 // ================= CAPACIDAD SEMANAL =================
@@ -1520,12 +1534,14 @@ function renderCapacityWidget() {
                 html += `<div class="capacity-user-row">
             <div class="capacity-user-icon">${user}</div>
             <div class="capacity-input-wrapper">
-                <input type="number" 
-                       class="capacity-input" 
-                       value="${value}" 
-                       min="0" 
+                <input type="number"
+                       class="capacity-input"
+                       value="${value}"
+                       min="0"
                        max="100"
                        onchange="updateCapacity('${user}', '${weekKey}', this.value)"
+                       onwheel="handleCapacityWheel(event, '${user}', '${weekKey}', this.value)"
+                       onclick="this.select()"
                        placeholder="0">
                 <span class="capacity-percent-symbol">%</span>
             </div>
