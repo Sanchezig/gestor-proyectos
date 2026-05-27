@@ -141,6 +141,53 @@
             flex-direction: column;
             box-shadow: var(--shadow-soft);
             position: relative;
+            transition: width 250ms ease, padding 250ms ease;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .sidebar-toggle-btn {
+            position: absolute;
+            top: 16px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.12);
+            border: none;
+            color: #f8f4ff;
+            border-radius: 6px;
+            width: 26px;
+            height: 26px;
+            cursor: pointer;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 150ms, right 250ms;
+            z-index: 20;
+            flex-shrink: 0;
+        }
+
+        .sidebar-toggle-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .sidebar.collapsed {
+            width: 42px;
+            padding: 16px 0;
+            align-items: center;
+        }
+
+        .sidebar.collapsed .sidebar-logo,
+        .sidebar.collapsed .sidebar-subtitle,
+        .sidebar.collapsed .btn-new-project,
+        .sidebar.collapsed .sidebar-content,
+        .sidebar.collapsed .user-control {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .sidebar.collapsed .sidebar-toggle-btn {
+            position: static;
+            margin: 0 auto;
         }
 
 

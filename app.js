@@ -3358,6 +3358,14 @@ function sortDailyProjects(projects) {
             renderTeamView();
         }
 
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const btn = document.getElementById('sidebarToggle');
+            const collapsed = sidebar.classList.toggle('collapsed');
+            btn.textContent = collapsed ? '▶' : '◀';
+            btn.title = collapsed ? 'Expandir panel' : 'Contraer panel';
+        }
+
         function toggleVacation(member, dateKey, event) {
             if (member !== currentUser) {
                 alert('Solo puedes marcar tus propias vacaciones');
