@@ -2347,8 +2347,8 @@ function renderDashboard() {
     // BARRA DE FILTROS — pills/chips
     let html = `
     <div class="dash-filters">
-        <div class="dash-filter-row">
 
+        <div class="dash-filter-row">
             <div class="dash-filter-group">
                 <span class="dash-filter-label">🔍 Proyecto</span>
                 <input type="text" id="dashFilterProyecto" class="dash-filter-input" placeholder="Buscar..." value="${dashboardFilters.proyecto || ''}">
@@ -2386,7 +2386,9 @@ function renderDashboard() {
                     ${impactos.map(i => `<button class="dash-pill${(dashboardFilters.impactos||[]).includes(i) ? ' active' : ''}" onclick="toggleDashFilter('impactos','${i}')">${i}</button>`).join('')}
                 </div>
             </div>` : ''}
+        </div>
 
+        <div class="dash-filter-row dash-filter-row--dates">
             <div class="dash-filter-group">
                 <span class="dash-filter-label">📅 Inicio</span>
                 <div class="dash-date-range">
@@ -2394,7 +2396,10 @@ function renderDashboard() {
                     <span class="dash-date-sep">→</span>
                     <input type="date" class="dash-filter-input dash-date-input" value="${dashboardFilters.fechaInicioHasta || ''}" onchange="setDashboardFilter('fechaInicioHasta', this.value)">
                 </div>
-                <span class="dash-filter-label" style="margin-top:6px">📅 Fin</span>
+            </div>
+
+            <div class="dash-filter-group">
+                <span class="dash-filter-label">📅 Fin</span>
                 <div class="dash-date-range">
                     <input type="date" class="dash-filter-input dash-date-input" value="${dashboardFilters.fechaFinDesde || ''}" onchange="setDashboardFilter('fechaFinDesde', this.value)">
                     <span class="dash-date-sep">→</span>
@@ -2403,13 +2408,12 @@ function renderDashboard() {
             </div>
 
             <div class="dash-filter-group dash-filter-group--action">
-                <span class="dash-filter-label">&nbsp;</span>
                 <button class="btn-clear-filters" onclick="clearDashboardFilters()">
                     🗑️ Limpiar${activeFiltersCount > 0 ? ` (${activeFiltersCount})` : ''}
                 </button>
             </div>
-
         </div>
+
     </div>
     `;
 

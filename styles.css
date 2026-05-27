@@ -2694,6 +2694,13 @@
     align-items: flex-start;
 }
 
+.dash-filter-row--dates {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #f0f0f0;
+    align-items: flex-end;
+}
+
 .dash-filter-group {
     display: flex;
     flex-direction: column;
