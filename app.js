@@ -213,6 +213,7 @@ function handlePrereqClick(event, projectId, prereqName) {
         let teamVacations = [];
         let selectedVacationDays = []; // Rastrear días seleccionados para vacaciones
         let currentMonth = new Date();
+        let sidebarAutoCollapsed = false; // Indica si el sidebar fue colapsado automáticamente por la vista Equipo
         const teamMembers = ['IS', 'HR', 'PU', 'AR', 'MR', 'AP']; // Ajusta según tu equipo
         const excludedResponsibles = ['DH'];
 
@@ -2918,6 +2919,17 @@ function sortDailyProjects(projects) {
 
 
         function switchView(view) {
+            // Si salimos de Equipo y el sidebar fue colapsado automáticamente, restaurarlo
+            if (view !== 'equipo' && sidebarAutoCollapsed) {
+                const sidebar = document.getElementById('sidebar');
+                const toggleBtn = document.getElementById('sidebarToggle');
+                if (sidebar) {
+                    sidebar.classList.remove('collapsed');
+                    if (toggleBtn) { toggleBtn.textContent = '◀'; toggleBtn.title = 'Contraer panel'; }
+                }
+                sidebarAutoCollapsed = false;
+            }
+
             // 1. Referencias a los contenedores
             const dailyView = document.querySelector('.daily-view');
             const fichaView = document.querySelector('.project-ficha');
@@ -2962,6 +2974,7 @@ function sortDailyProjects(projects) {
                 if (sidebar && !sidebar.classList.contains('collapsed')) {
                     sidebar.classList.add('collapsed');
                     if (toggleBtn) { toggleBtn.textContent = '▶'; toggleBtn.title = 'Expandir panel'; }
+                    sidebarAutoCollapsed = true;
                 }
                 renderTeamView();
             } else if (view === 'dashboard') {          // <-- AQUÍ
