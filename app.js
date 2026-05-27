@@ -2394,10 +2394,7 @@ function renderDashboard() {
                     <span class="dash-date-sep">→</span>
                     <input type="date" class="dash-filter-input dash-date-input" value="${dashboardFilters.fechaInicioHasta || ''}" onchange="setDashboardFilter('fechaInicioHasta', this.value)">
                 </div>
-            </div>
-
-            <div class="dash-filter-group">
-                <span class="dash-filter-label">📅 Fin</span>
+                <span class="dash-filter-label" style="margin-top:6px">📅 Fin</span>
                 <div class="dash-date-range">
                     <input type="date" class="dash-filter-input dash-date-input" value="${dashboardFilters.fechaFinDesde || ''}" onchange="setDashboardFilter('fechaFinDesde', this.value)">
                     <span class="dash-date-sep">→</span>
@@ -2517,7 +2514,7 @@ function renderDashboard() {
             <td><span class="badge badge-fase">${p.phase || '-'}</span></td>
             <td><span class="badge badge-${(p.priority || 'Media').toLowerCase()}">${p.priority || '-'}</span></td>
             <td><span class="badge badge-${(p.impact || 'Medio').toLowerCase()}">${p.impact || '-'}</span></td>
-            <td><span class="badge badge-status badge-${(p.status || 'Verde').toLowerCase()}">${p.status || '-'}</span></td>
+            <td><span class="badge badge-status badge-${(p.status || 'Verde').toLowerCase()}">${getStatusText(p.status) || '-'}</span></td>
             <td>
                 <div class="progress-bar-container">
                     <div class="progress-bar-fill" style="width: ${progress}%"></div>
