@@ -1820,7 +1820,7 @@
             width: 8px;
             min-width: 8px;
             max-width: 8px;
-            height: 18px;
+            height: 14px;
             padding: 0;
             font-size: 0;
             border-width: 0 1px 1px 0;
@@ -1833,7 +1833,7 @@
 
         .calendar-table--compact thead th.month-header {
             font-size: 10px;
-            padding: 5px 2px;
+            padding: 3px 2px;
         }
 
         .calendar-table--compact tbody td:not(.name-column):hover {
