@@ -3166,7 +3166,7 @@ function sortDailyProjects(projects) {
 
                 // ===== THEAD: solo cabecera de meses =====
                 html += `<thead><tr>`;
-                html += `<th class="name-column">Miembro</th>`;
+                html += `<th class="name-column"></th>`;
 
                 semester.months.forEach((m, idx) => {
                     const daysInMonth = new Date(year, m + 1, 0).getDate();
