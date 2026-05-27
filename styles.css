@@ -1798,6 +1798,55 @@
             background: linear-gradient(135deg, #f5f5f5 0%, #f5f5f5 50%, #4a90e2 50%, #4a90e2 100%);
         }
 
+        /* ===== VISTA POR SEMESTRES ===== */
+        .semester-block {
+            margin-bottom: 20px;
+        }
+
+        .semester-label {
+            font-size: 12px;
+            font-weight: 700;
+            color: #7a1ea2;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            padding: 6px 2px 4px 2px;
+            border-bottom: 2px solid #e8d5f5;
+            margin-bottom: 6px;
+        }
+
+        /* Celdas ultra-compactas (8px) para vista de año completo */
+        .calendar-table--compact tbody td:not(.name-column) {
+            width: 8px;
+            min-width: 8px;
+            max-width: 8px;
+            height: 26px;
+            padding: 0;
+            font-size: 0;
+            border-width: 0 1px 1px 0;
+            border-color: rgba(0,0,0,0.06);
+        }
+
+        .calendar-table--compact thead th:not(.name-column):not(.month-header) {
+            display: none;
+        }
+
+        .calendar-table--compact thead th.month-header {
+            font-size: 10px;
+            padding: 5px 2px;
+        }
+
+        .calendar-table--compact tbody td:not(.name-column):hover {
+            transform: scaleY(1.2) scaleX(1.5);
+            z-index: 5;
+            box-shadow: 0 0 6px rgba(122, 30, 162, 0.5);
+        }
+
+        /* Separador de mes más fino en vista compacta */
+        .calendar-table--compact tbody td.month-separator,
+        .calendar-table--compact thead th.month-separator {
+            border-left: 2px solid #7a1ea2 !important;
+        }
+
         .team-stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

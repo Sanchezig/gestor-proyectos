@@ -3119,15 +3119,15 @@ function sortDailyProjects(projects) {
         function renderTeamView() {
             const container = document.getElementById('teamView');
 
-            // Header con navegación de mes
-            const monthName = currentMonth.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+            // Header con navegación de año
+            const year = currentMonth.getFullYear();
 
             let html = `
     <div class="team-header">
         <div class="month-navigation">
-            <button class="month-nav-btn" onclick="previousMonth()">← Mes anterior</button>
-            <div class="current-month">${monthName.charAt(0).toUpperCase() + monthName.slice(1)}</div>
-            <button class="month-nav-btn" onclick="nextMonth()">Mes siguiente →</button>
+            <button class="month-nav-btn" onclick="previousYear()">← Año anterior</button>
+            <div class="current-month">${year}</div>
+            <button class="month-nav-btn" onclick="nextYear()">Año siguiente →</button>
         </div>
         <button class="month-nav-btn" onclick="openVacationModal()">➕ Añadir vacaciones</button>
     </div>
@@ -3149,111 +3149,81 @@ function sortDailyProjects(projects) {
 
         function renderMonthCalendar() {
             const year = currentMonth.getFullYear();
-            const month = currentMonth.getMonth();
 
-            // Generar calendario para varios meses consecutivos
-            const numberOfMonths = 12; // <--- CAMBIA ESTE NÚMERO PARA MÁS O MENOS MESES
-            const months = [];
+            // Vista de 2 semestres apilados
+            const semesters = [
+                { label: '1er Semestre', months: [0, 1, 2, 3, 4, 5] },
+                { label: '2º Semestre', months: [6, 7, 8, 9, 10, 11] }
+            ];
 
-            for (let i = 0; i < numberOfMonths; i++) {
-                const targetMonth = month + i;
-                const targetYear = year + Math.floor(targetMonth / 12);
-                const adjustedMonth = targetMonth % 12;
+            let html = '';
 
-                months.push({
-                    year: targetYear,
-                    month: adjustedMonth
+            semesters.forEach(semester => {
+                html += `<div class="semester-block">
+    <div class="semester-label">${semester.label} · ${year}</div>
+    <div class="calendar-scroll-container">
+    <table class="calendar-table calendar-table--compact">`;
+
+                // ===== THEAD: solo cabecera de meses =====
+                html += `<thead><tr>`;
+                html += `<th class="name-column">Miembro</th>`;
+
+                semester.months.forEach((m, idx) => {
+                    const daysInMonth = new Date(year, m + 1, 0).getDate();
+                    const monthName = new Date(year, m, 1).toLocaleDateString('es-ES', { month: 'long' });
+                    const sep = idx > 0 ? ' month-separator' : '';
+                    html += `<th class="month-header${sep}" colspan="${daysInMonth}">${monthName.charAt(0).toUpperCase() + monthName.slice(1)}</th>`;
                 });
-            }
+                html += `</tr></thead>`;
 
-            let html = `<div class="calendar-scroll-container"><table class="calendar-table">`;
+                // ===== TBODY: filas de miembros =====
+                html += `<tbody>`;
 
-            // ===== THEAD: HEADERS DE MESES =====
-            html += `<thead><tr>`;
-            html += `<th class="name-column">Miembro</th>`;
+                teamMembers.forEach(member => {
+                    html += `<tr>`;
+                    html += `<td class="name-column">${member}</td>`;
 
-            months.forEach(m => {
-                const daysInMonth = new Date(m.year, m.month + 1, 0).getDate();
-                const monthName = new Date(m.year, m.month, 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-                html += `<th class="month-header" colspan="${daysInMonth}">${monthName.charAt(0).toUpperCase() + monthName.slice(1)}</th>`;
-            });
-            html += `</tr>`;
+                    semester.months.forEach((m, monthIndex) => {
+                        const daysInMonth = new Date(year, m + 1, 0).getDate();
 
-            // ===== THEAD: HEADERS DE DÍAS =====
-            html += `<tr><th class="name-column"></th>`;
+                        for (let day = 1; day <= daysInMonth; day++) {
+                            const date = new Date(year, m, day);
+                            const dateKey = formatDateKey(date);
+                            const dayOfWeek = date.getDay();
+                            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                            const isHoliday = madridHolidays.includes(dateKey);
 
-            months.forEach((m, monthIndex) => {
-                const daysInMonth = new Date(m.year, m.month + 1, 0).getDate();
-                for (let day = 1; day <= daysInMonth; day++) {
-                    const date = new Date(m.year, m.month, day);
-                    const dayOfWeek = date.getDay();
-                    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-                    const dayName = date.toLocaleDateString('es-ES', { weekday: 'narrow' }).toUpperCase();
-                    const weekendClass = isWeekend ? ' weekend-header' : '';
-                    const separatorClass = (day === 1 && monthIndex > 0) ? ' month-separator' : '';
-                    html += `<th class="${weekendClass}${separatorClass}" title="${date.toLocaleDateString('es-ES')}">${dayName}<br>${day}</th>`;
-                }
-            });
-            html += `</tr></thead>`;
+                            const vacation = teamVacations.find(v =>
+                                v.user_initials === member &&
+                                dateKey >= v.start_date &&
+                                dateKey <= v.end_date
+                            );
 
-            // ===== TBODY: FILAS DE MIEMBROS =====
-            html += `<tbody>`;
+                            const isSelected = selectedVacationDays.some(
+                                d => d.member === member && d.dateKey === dateKey
+                            );
 
-            teamMembers.forEach(member => {
-                html += `<tr>`;
-                html += `<td class="name-column">${member}</td>`;
-
-                months.forEach((m, monthIndex) => {
-                    const daysInMonth = new Date(m.year, m.month + 1, 0).getDate();
-
-                    for (let day = 1; day <= daysInMonth; day++) {
-                        const date = new Date(m.year, m.month, day);
-                        const dateKey = formatDateKey(date);
-                        const dayOfWeek = date.getDay();
-                        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-                        const isHoliday = madridHolidays.includes(dateKey);
-
-                        // Check if user has vacation this day
-                        const vacation = teamVacations.find(v =>
-                            v.user_initials === member &&
-                            dateKey >= v.start_date &&
-                            dateKey <= v.end_date
-                        );
-
-                        let cellClass = '';
-                        let cellContent = '';
-
-                        if (isWeekend) cellClass += ' weekend';
-                        if (isHoliday) cellClass += ' holiday';
-                        if (day === 1 && monthIndex > 0) cellClass += ' month-separator';
-
-                        // Verificar si este día está seleccionado
-                        const isSelected = selectedVacationDays.some(
-                            d => d.member === member && d.dateKey === dateKey
-                        );
-                        if (isSelected) cellClass += ' vacation-selected';
-
-                        if (vacation) {
-                            if (vacation.vacation_type === 'current_year') {
-                                cellClass += ' vacation-current-year';
-                            } else if (vacation.vacation_type === 'previous_year') {
-                                cellClass += ' vacation-previous-year';
-                            } else if (vacation.vacation_type === 'willis_choice') {
-                                cellClass += ' vacation-willis-choice';
+                            let cellClass = '';
+                            if (isWeekend) cellClass += ' weekend';
+                            if (isHoliday) cellClass += ' holiday';
+                            if (day === 1 && monthIndex > 0) cellClass += ' month-separator';
+                            if (isSelected) cellClass += ' vacation-selected';
+                            if (vacation) {
+                                if (vacation.vacation_type === 'current_year') cellClass += ' vacation-current-year';
+                                else if (vacation.vacation_type === 'previous_year') cellClass += ' vacation-previous-year';
+                                else if (vacation.vacation_type === 'willis_choice') cellClass += ' vacation-willis-choice';
                             }
-                            cellContent = Number(vacation.days_count) % 1 === 0 ? Number(vacation.days_count) : Number(vacation.days_count).toFixed(1);
-                        }
 
-                        html += `<td class="${cellClass}" onclick="toggleVacation('${member}', '${dateKey}', event)" title="${member} - ${dateKey}">${cellContent}</td>`;
-                    }
+                            const tooltip = `${member} · ${date.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}${vacation ? ' · Vacaciones' : ''}`;
+                            html += `<td class="${cellClass}" onclick="toggleVacation('${member}', '${dateKey}', event)" title="${tooltip}"></td>`;
+                        }
+                    });
+
+                    html += `</tr>`;
                 });
 
-                html += `</tr>`;
+                html += `</tbody></table></div></div>`;
             });
-
-            html += `</tbody></table></div>`;
-
-            // AQUÍ ES DONDE ESTABA LA LEYENDA, YA BORRADA.
 
             return html;
         }
@@ -3375,6 +3345,16 @@ function sortDailyProjects(projects) {
 
         function nextMonth() {
             currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
+            renderTeamView();
+        }
+
+        function previousYear() {
+            currentMonth = new Date(currentMonth.getFullYear() - 1, 0, 1);
+            renderTeamView();
+        }
+
+        function nextYear() {
+            currentMonth = new Date(currentMonth.getFullYear() + 1, 0, 1);
             renderTeamView();
         }
 
