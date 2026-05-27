@@ -5,6 +5,10 @@ $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 
 Write-Host "🚀 Deploying Gestor Proyectos..." -ForegroundColor Cyan
 
+# Sincronizar HTML local → index.html (el que sirve GitHub Pages)
+Copy-Item "PROD - Gestor Proyectos.html" "index.html" -Force
+Write-Host "✓ Sincronizado HTML → index.html" -ForegroundColor Green
+
 # Stage all changes
 git add -A
 Write-Host "✓ Staged files" -ForegroundColor Green

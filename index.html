@@ -5,17 +5,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PROD - WTW - Gestor de Proyectos</title>
-    <link rel="icon" type="image/x-icon" href="calendar.ico">
-    <link rel="stylesheet" href="styles.css">
+	<link rel="icon" type="image/x-icon" href="calendar.ico">
+	<link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
 </head>
-
 <body>
     <div class="login-screen" id="loginScreen">
         <div class="login-card">
             <img src="logo.png?v=20260521b" alt="P&OI" class="login-logo" onerror="this.style.display='none';this.nextElementSibling.style.display='block';">
             <div class="login-logo-fallback" style="display:none;">P&amp;OI</div>
             <h1 class="login-title">Gestor de Proyectos</h1>
+
             <div class="login-form">
                 <input type="password" id="loginPassword" class="login-input" placeholder="Contraseña" autocomplete="current-password">
                 <button class="login-button" id="loginButton" type="button">Entrar</button>
@@ -26,9 +26,11 @@
 
     <div id="appShell" class="app-shell app-shell--hidden">
     <div class="container">
-        <div class="sidebar">
+        <div class="sidebar" id="sidebar">
+            <button class="sidebar-toggle-btn" id="sidebarToggle" onclick="toggleSidebar()" title="Contraer panel">◀</button>
             <div class="sidebar-logo">WTW</div>
-            <button class="btn-new-project" onclick="openNewProjectModal()">Nuevo proyecto</button>
+            <div class="sidebar-subtitle">Gestor de proyectos</div>
+            <button class="btn-new-project" onclick="openNewProjectModal()">✨ Nuevo proyecto</button>
 
             <div class="sidebar-content">
                 <div class="sidebar-title">Activos</div>
@@ -38,14 +40,16 @@
                 <ul class="sidebar-list" id="projectsListCompleted"></ul>
             </div>
 
+            <!-- Control de usuario -->
             <div class="user-control">
-                <div class="user-icon">US</div>
+                <div class="user-icon">👤</div>
                 <div class="user-info">
-                    <div class="user-name" id="currentUserDisplay">Usuario</div>
+                    <div class="user-name" id="currentUserDisplay">NN</div>
                     <button class="user-change-btn" onclick="changeUser()">Cambiar</button>
                 </div>
             </div>
         </div>
+
 
         <div class="main-content">
             <div class="toolbar">
@@ -53,35 +57,38 @@
                     <h2 id="viewTitle">Daily</h2>
                 </div>
                 <div class="view-toggle">
-                    <button class="active" onclick="switchView('daily')">Daily</button>
-                    <button onclick="switchView('ficha')">Ficha Proyecto</button>
-                    <button onclick="switchView('equipo')">Equipo</button>
-                    <button onclick="switchView('dashboard')">Dashboard</button>
+                    <button class="active" onclick="switchView('daily')">📅 Daily</button>
+                    <button onclick="switchView('ficha')">📋 Ficha Proyecto</button>
+                    <button onclick="switchView('equipo')">👥 Equipo</button>
+					<button onclick="switchView('dashboard')">📈Dashboard</button>
                 </div>
             </div>
 
             <div class="content-area">
                 <div class="daily-view active" id="dailyView">
                     <div class="week-navigation">
-                        <button class="week-nav-btn" onclick="previousWeek()">Semana anterior</button>
+                        <button class="week-nav-btn" onclick="previousWeek()">← Semana anterior</button>
                         <div class="week-info" id="weekInfo"></div>
-                        <button class="week-nav-btn" onclick="nextWeek()">Semana siguiente</button>
+                        <button class="week-nav-btn" onclick="nextWeek()">Semana siguiente →</button>
                     </div>
 
                     <div class="daily-mode-bar">
                         <div class="daily-mode-toggle">
-                            <button id="btnDailyActivos" class="active" onclick="setDailyViewMode('activos')">Activos</button>
+                            <button id="btnDailyActivos" class="active"
+                                onclick="setDailyViewMode('activos')">Activos</button>
                             <button id="btnDailyCompletados" onclick="setDailyViewMode('completados')">Completados</button>
                         </div>
-                        <div class="daily-resp-filter-inline" id="dailyRespFilter"></div>
+                        <div id="dailyRespFilter" class="daily-resp-filter-inline"></div>
                     </div>
 
                     <div id="dailyTableContainer"></div>
                 </div>
 
                 <div class="project-ficha" id="fichaView"></div>
+
+                <!-- VISTA EQUIPO -->
                 <div class="team-view" id="teamView"></div>
-                <div class="dashboard-view" id="dashboardView"></div>
+				<div class="dashboard-view" id="dashboardView"></div>
             </div>
         </div>
     </div>
@@ -147,7 +154,7 @@
             <div class="modal-title">Crear nuevo proyecto</div>
             <div class="form-group">
                 <label>Nombre de la iniciativa</label>
-                <input type="text" id="projectName" placeholder="Ej: Automatizacion de Claims...">
+                <input type="text" id="projectName" placeholder="Ej: Automatización de Claims...">
             </div>
             <div class="form-group">
                 <label>Fecha inicio</label>
@@ -168,10 +175,10 @@
             </div>
             <div class="form-group">
                 <label>Stakeholders</label>
-                <input type="text" id="projectStakeholders" placeholder="Ej: Juan (Product Owner), Maria (IT), ...">
+                <input type="text" id="projectStakeholders" placeholder="Ej: Juan (Product Owner), María (IT), ...">
             </div>
             <div class="form-group">
-                <label>Ahorro (EUR)</label>
+                <label>Ahorro (€)</label>
                 <input type="number" id="volume" placeholder="Ej: 50000" min="0" step="0.01">
             </div>
             <div class="form-group">
@@ -185,10 +192,11 @@
             </div>
         </div>
     </div>
+
     </div>
 
-    <script src="config.js"></script>
-    <script src="app.js"></script>
+	<script src="config.js"></script>
+	<script src="app.js"></script>
 </body>
 
 </html>
