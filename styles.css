@@ -1879,6 +1879,24 @@
             padding: 3px 2px;
         }
 
+        .calendar-table--compact thead th.day-header {
+            width: 8px;
+            min-width: 8px;
+            max-width: 8px;
+            overflow: hidden;
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            font-size: 6px;
+            font-weight: 400;
+            padding: 3px 0;
+            color: #9a85b8;
+            background: #2a1b4a;
+        }
+
+        .calendar-table--compact thead th.day-header.weekend-header {
+            color: #5a4a72;
+        }
+
         .calendar-table--compact tbody td:not(.name-column):hover {
             transform: scaleY(1.2) scaleX(1.5);
             z-index: 5;
