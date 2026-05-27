@@ -293,6 +293,14 @@ let dailySort = {
     direction: 'asc'
 };
 
+function toggleDashFilter(key, value) {
+    const arr = dashboardFilters[key];
+    const idx = arr.indexOf(value);
+    if (idx === -1) arr.push(value);
+    else arr.splice(idx, 1);
+    renderDashboard();
+}
+
 function setDashboardFilter(field, value) {
   dashboardFilters[field] = value;
   
@@ -2336,119 +2344,74 @@ function renderDashboard() {
         dashboardFilters.fechaFinHasta
     ].filter(Boolean).length;
 
-    // BARRA DE FILTROS MEJORADA
+    // BARRA DE FILTROS — pills/chips
     let html = `
-    <div class="dashboard-header">
-        ${activeFiltersCount > 0 ? `
-        <div class="active-filters-badge">
-            ${activeFiltersCount} filtro${activeFiltersCount > 1 ? 's' : ''} activo${activeFiltersCount > 1 ? 's' : ''}
-        </div>` : ''}
-    </div>
+    <div class="dash-filters">
+        <div class="dash-filter-row">
 
-    <div class="dashboard-filters-bar">
-        <div class="filter-group">
-            <label>🔍 Proyecto</label>
-            <input 
-                type="text" 
-                id="dashFilterProyecto"
-                class="filter-input-modern" 
-                placeholder="Buscar..." 
-                value="${dashboardFilters.proyecto || ''}"
-            >
-        </div>
-
-                <div class="filter-group">
-            <label>📋 Fase</label>
-            <select 
-                id="dashFilterFase" 
-                class="filter-select-compact" 
-                multiple 
-                size="3"
-            >
-                ${fases.map(f => `<option value="${f}" ${(dashboardFilters.fases || []).includes(f) ? 'selected' : ''}>${f}</option>`).join('')}
-            </select>
-        </div>
-
-        <div class="filter-group">
-            <label>⚡ Prioridad</label>
-            <select 
-                id="dashFilterPrioridad" 
-                class="filter-select-compact" 
-                multiple 
-                size="3"
-            >
-                ${prioridades.map(p => `<option value="${p}" ${(dashboardFilters.prioridades || []).includes(p) ? 'selected' : ''}>${p}</option>`).join('')}
-            </select>
-        </div>
-
-        <div class="filter-group">
-            <label>💥 Impacto</label>
-            <select 
-                id="dashFilterImpacto" 
-                class="filter-select-compact" 
-                multiple 
-                size="3"
-            >
-                ${impactos.map(i => `<option value="${i}" ${(dashboardFilters.impactos || []).includes(i) ? 'selected' : ''}>${i}</option>`).join('')}
-            </select>
-        </div>
-
-        <div class="filter-group">
-            <label>🚦 Estado</label>
-            <select 
-                id="dashFilterEstado" 
-                class="filter-select-compact" 
-                multiple 
-                size="3"
-            >
-                ${estados.map(e => `<option value="${e}" ${(dashboardFilters.estados || []).includes(e) ? 'selected' : ''}>${e}</option>`).join('')}
-            </select>
-        </div>
-
-
-        <div class="filter-group filter-group-wide">
-            <label>📅 Rango Fecha Inicio</label>
-            <div class="date-range">
-                <input 
-                    type="date" 
-                    id="dashFilterFechaInicioDesde"
-                    class="filter-input-modern date-input" 
-                    value="${dashboardFilters.fechaInicioDesde || ''}"
-                >
-                <span class="date-separator">→</span>
-                <input 
-                    type="date" 
-                    id="dashFilterFechaInicioHasta"
-                    class="filter-input-modern date-input" 
-                    value="${dashboardFilters.fechaInicioHasta || ''}"
-                >
+            <div class="dash-filter-group">
+                <span class="dash-filter-label">🔍 Proyecto</span>
+                <input type="text" id="dashFilterProyecto" class="dash-filter-input" placeholder="Buscar..." value="${dashboardFilters.proyecto || ''}">
             </div>
-        </div>
 
-        <div class="filter-group filter-group-wide">
-            <label>📅 Rango Fecha Fin</label>
-            <div class="date-range">
-                <input 
-                    type="date" 
-                    id="dashFilterFechaFinDesde"
-                    class="filter-input-modern date-input" 
-                    value="${dashboardFilters.fechaFinDesde || ''}"
-                >
-                <span class="date-separator">→</span>
-                <input 
-                    type="date" 
-                    id="dashFilterFechaFinHasta"
-                    class="filter-input-modern date-input" 
-                    value="${dashboardFilters.fechaFinHasta || ''}"
-                >
+            <div class="dash-filter-group">
+                <span class="dash-filter-label">🚦 Estado</span>
+                <div class="dash-pills">
+                    <button class="dash-pill dash-pill--verde${(dashboardFilters.estados||[]).includes('Verde') ? ' active' : ''}" onclick="toggleDashFilter('estados','Verde')">✅ On Time</button>
+                    <button class="dash-pill dash-pill--ambar${(dashboardFilters.estados||[]).includes('Ámbar') ? ' active' : ''}" onclick="toggleDashFilter('estados','Ámbar')">⚠️ Riesgo</button>
+                    <button class="dash-pill dash-pill--rojo${(dashboardFilters.estados||[]).includes('Rojo') ? ' active' : ''}" onclick="toggleDashFilter('estados','Rojo')">🚫 Bloqueo</button>
+                </div>
             </div>
-        </div>
 
-        <div class="filter-group filter-group-action">
-            <label>&nbsp;</label>
-            <button class="btn-clear-filters" onclick="clearDashboardFilters()">
-                🗑️ Limpiar filtros
-            </button>
+            ${fases.length ? `
+            <div class="dash-filter-group">
+                <span class="dash-filter-label">📋 Fase</span>
+                <div class="dash-pills">
+                    ${fases.map(f => `<button class="dash-pill${(dashboardFilters.fases||[]).includes(f) ? ' active' : ''}" onclick="toggleDashFilter('fases','${f}')">${f}</button>`).join('')}
+                </div>
+            </div>` : ''}
+
+            ${prioridades.length ? `
+            <div class="dash-filter-group">
+                <span class="dash-filter-label">⚡ Prioridad</span>
+                <div class="dash-pills">
+                    ${prioridades.map(p => `<button class="dash-pill${(dashboardFilters.prioridades||[]).includes(p) ? ' active' : ''}" onclick="toggleDashFilter('prioridades','${p}')">${p}</button>`).join('')}
+                </div>
+            </div>` : ''}
+
+            ${impactos.length ? `
+            <div class="dash-filter-group">
+                <span class="dash-filter-label">💥 Impacto</span>
+                <div class="dash-pills">
+                    ${impactos.map(i => `<button class="dash-pill${(dashboardFilters.impactos||[]).includes(i) ? ' active' : ''}" onclick="toggleDashFilter('impactos','${i}')">${i}</button>`).join('')}
+                </div>
+            </div>` : ''}
+
+            <div class="dash-filter-group">
+                <span class="dash-filter-label">📅 Inicio</span>
+                <div class="dash-date-range">
+                    <input type="date" class="dash-filter-input dash-date-input" value="${dashboardFilters.fechaInicioDesde || ''}" onchange="setDashboardFilter('fechaInicioDesde', this.value)">
+                    <span class="dash-date-sep">→</span>
+                    <input type="date" class="dash-filter-input dash-date-input" value="${dashboardFilters.fechaInicioHasta || ''}" onchange="setDashboardFilter('fechaInicioHasta', this.value)">
+                </div>
+            </div>
+
+            <div class="dash-filter-group">
+                <span class="dash-filter-label">📅 Fin</span>
+                <div class="dash-date-range">
+                    <input type="date" class="dash-filter-input dash-date-input" value="${dashboardFilters.fechaFinDesde || ''}" onchange="setDashboardFilter('fechaFinDesde', this.value)">
+                    <span class="dash-date-sep">→</span>
+                    <input type="date" class="dash-filter-input dash-date-input" value="${dashboardFilters.fechaFinHasta || ''}" onchange="setDashboardFilter('fechaFinHasta', this.value)">
+                </div>
+            </div>
+
+            <div class="dash-filter-group dash-filter-group--action">
+                <span class="dash-filter-label">&nbsp;</span>
+                <button class="btn-clear-filters" onclick="clearDashboardFilters()">
+                    🗑️ Limpiar${activeFiltersCount > 0 ? ` (${activeFiltersCount})` : ''}
+                </button>
+            </div>
+
         </div>
     </div>
     `;
@@ -2639,54 +2602,21 @@ function renderDashboard() {
 
     container.innerHTML = html;
 
-    // Event listeners
+    // Solo necesitamos listener para el texto (preservar cursor al teclear)
     setTimeout(() => {
-  // Filtro de texto - CON PRESERVACIÓN DE CURSOR
-  const proyectoInput = document.getElementById('dashFilterProyecto');
-  if (proyectoInput) {
-    proyectoInput.addEventListener('input', (e) => {
-      const cursorPosition = e.target.selectionStart;
-      dashboardFilters.proyecto = e.target.value;
-      renderDashboard();
-      
-      // Restaurar cursor después del re-render
-      setTimeout(() => {
-        const newInput = document.getElementById('dashFilterProyecto');
-        if (newInput) {
-          newInput.focus();
-          newInput.setSelectionRange(cursorPosition, cursorPosition);
+        const proyectoInput = document.getElementById('dashFilterProyecto');
+        if (proyectoInput) {
+            proyectoInput.addEventListener('input', (e) => {
+                const cursorPos = e.target.selectionStart;
+                dashboardFilters.proyecto = e.target.value;
+                renderDashboard();
+                setTimeout(() => {
+                    const newInput = document.getElementById('dashFilterProyecto');
+                    if (newInput) { newInput.focus(); newInput.setSelectionRange(cursorPos, cursorPos); }
+                }, 0);
+            });
         }
-      }, 0);
-    });
-  }
-  
-  ['dashFilterFase', 'dashFilterPrioridad', 'dashFilterImpacto', 'dashFilterEstado'].forEach(id => {
-    const select = document.getElementById(id);
-    if (select) {
-      select.addEventListener('change', () => {
-        const selected = Array.from(select.selectedOptions).map(opt => opt.value);
-        const keyMap = {
-          'dashFilterFase': 'fases',
-          'dashFilterPrioridad': 'prioridades',
-          'dashFilterImpacto': 'impactos',
-          'dashFilterEstado': 'estados'
-        };
-        dashboardFilters[keyMap[id]] = selected;
-        renderDashboard();
-      });
-    }
-  });
-  
-  ['fechaInicioDesde', 'fechaInicioHasta', 'fechaFinDesde', 'fechaFinHasta'].forEach(key => {
-    const input = document.getElementById(`dashFilter${key.charAt(0).toUpperCase() + key.slice(1)}`);
-    if (input) {
-      input.addEventListener('change', (e) => {
-        dashboardFilters[key] = e.target.value;
-        renderDashboard();
-      });
-    }
-  });
-}, 0);
+    }, 0);
 
 }
 
