@@ -1889,12 +1889,12 @@
             font-size: 6px;
             font-weight: 400;
             padding: 3px 0;
-            color: #9a85b8;
+            color: #ffffff;
             background: #2a1b4a;
         }
 
         .calendar-table--compact thead th.day-header.weekend-header {
-            color: #5a4a72;
+            color: #aaaaaa;
         }
 
         .calendar-table--compact tbody td:not(.name-column):hover {
