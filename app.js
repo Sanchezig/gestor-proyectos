@@ -3164,7 +3164,7 @@ function sortDailyProjects(projects) {
     <div class="calendar-scroll-container">
     <table class="calendar-table calendar-table--compact">`;
 
-                // ===== THEAD: cabecera de meses + números de día =====
+                // ===== THEAD: solo cabecera de meses =====
                 html += `<thead><tr>`;
                 html += `<th class="name-column"></th>`;
 
@@ -3173,20 +3173,6 @@ function sortDailyProjects(projects) {
                     const monthName = new Date(year, m, 1).toLocaleDateString('es-ES', { month: 'long' });
                     const sep = idx > 0 ? ' month-separator' : '';
                     html += `<th class="month-header${sep}" colspan="${daysInMonth}">${monthName.charAt(0).toUpperCase() + monthName.slice(1)}</th>`;
-                });
-                html += `</tr><tr>`;
-                html += `<th class="name-column"></th>`;
-
-                semester.months.forEach((m, monthIndex) => {
-                    const daysInMonth = new Date(year, m + 1, 0).getDate();
-                    for (let day = 1; day <= daysInMonth; day++) {
-                        const date = new Date(year, m, day);
-                        const dayOfWeek = date.getDay();
-                        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-                        const weekendClass = isWeekend ? ' weekend-header' : '';
-                        const sepClass = (day === 1 && monthIndex > 0) ? ' month-separator' : '';
-                        html += `<th class="day-header${weekendClass}${sepClass}">${day}</th>`;
-                    }
                 });
                 html += `</tr></thead>`;
 

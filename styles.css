@@ -1827,22 +1827,6 @@
             border-color: rgba(0,0,0,0.06);
         }
 
-        .calendar-table--compact thead th.day-header {
-            writing-mode: vertical-rl;
-            transform: rotate(180deg);
-            font-size: 6px;
-            font-weight: 400;
-            padding: 2px 0;
-            height: 20px;
-            color: #aaa;
-            background: #2a1b4a;
-            overflow: hidden;
-        }
-
-        .calendar-table--compact thead th.day-header.weekend-header {
-            color: #666;
-        }
-
         .calendar-table--compact thead th.month-header {
             font-size: 10px;
             padding: 3px 2px;
