@@ -2956,6 +2956,13 @@ function sortDailyProjects(projects) {
                 teamView.classList.add('active');
                 document.querySelector('.view-toggle button:nth-child(3)').classList.add('active');
                 document.getElementById('viewTitle').textContent = 'Calendario de Equipo';
+                // Contraer sidebar automáticamente para ganar visibilidad
+                const sidebar = document.getElementById('sidebar');
+                const toggleBtn = document.getElementById('sidebarToggle');
+                if (sidebar && !sidebar.classList.contains('collapsed')) {
+                    sidebar.classList.add('collapsed');
+                    if (toggleBtn) { toggleBtn.textContent = '▶'; toggleBtn.title = 'Expandir panel'; }
+                }
                 renderTeamView();
             } else if (view === 'dashboard') {          // <-- AQUÍ
                 dashboardView.classList.add('active');
