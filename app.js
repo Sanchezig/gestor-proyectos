@@ -214,6 +214,8 @@ function handlePrereqClick(event, projectId, prereqName) {
         let selectedVacationDays = []; // Rastrear días seleccionados para vacaciones
         let currentMonth = new Date();
         let sidebarAutoCollapsed = false; // Indica si el sidebar fue colapsado automáticamente por la vista Equipo
+        let calendarZoom = 1; // 1=compact(8px) 2=medium(16px) 3=detail(28px)
+        const ZOOM_SIZES = [8, 16, 28];
         const teamMembers = ['IS', 'HR', 'PU', 'AR', 'MR', 'AP']; // Ajusta según tu equipo
         const excludedResponsibles = ['DH'];
 
@@ -3080,6 +3082,11 @@ function sortDailyProjects(projects) {
             <div class="current-month">${year}</div>
             <button class="month-nav-btn" onclick="nextYear()">Año siguiente →</button>
         </div>
+        <div class="calendar-zoom-controls">
+            <button class="zoom-btn" onclick="zoomCalendar(-1)" title="Reducir">−</button>
+            <span class="zoom-label">Zoom</span>
+            <button class="zoom-btn" onclick="zoomCalendar(1)" title="Ampliar">+</button>
+        </div>
         <button class="month-nav-btn" onclick="openVacationModal()">➕ Añadir vacaciones</button>
     </div>
 `;
@@ -3310,6 +3317,14 @@ function sortDailyProjects(projects) {
         function nextMonth() {
             currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
             renderTeamView();
+        }
+
+        function zoomCalendar(dir) {
+            calendarZoom = Math.max(0, Math.min(ZOOM_SIZES.length - 1, calendarZoom + dir));
+            const size = ZOOM_SIZES[calendarZoom];
+            document.querySelectorAll('.calendar-table--compact').forEach(t => {
+                t.style.setProperty('--day-w', size + 'px');
+            });
         }
 
         function previousYear() {

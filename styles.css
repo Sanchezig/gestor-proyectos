@@ -1847,6 +1847,41 @@
             background: linear-gradient(135deg, #f5f5f5 0%, #f5f5f5 50%, #4a90e2 50%, #4a90e2 100%);
         }
 
+        /* ===== ZOOM CALENDARIO ===== */
+        .calendar-zoom-controls {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .zoom-btn {
+            width: 26px;
+            height: 26px;
+            border-radius: 6px;
+            border: 1.5px solid rgba(255,255,255,0.25);
+            background: rgba(255,255,255,0.12);
+            color: #f8f4ff;
+            font-size: 16px;
+            font-weight: 600;
+            line-height: 1;
+            cursor: pointer;
+            transition: background 150ms;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .zoom-btn:hover {
+            background: rgba(255,255,255,0.25);
+        }
+
+        .zoom-label {
+            font-size: 11px;
+            color: rgba(255,255,255,0.6);
+            letter-spacing: 0.5px;
+            padding: 0 2px;
+        }
+
         /* ===== VISTA POR SEMESTRES ===== */
         .semester-block {
             margin-bottom: 20px;
@@ -1863,11 +1898,11 @@
             margin-bottom: 6px;
         }
 
-        /* Celdas ultra-compactas (8px) para vista de año completo */
+        /* Celdas ultra-compactas para vista de año completo — tamaño controlado por --day-w */
         .calendar-table--compact tbody td:not(.name-column) {
-            width: 8px;
-            min-width: 8px;
-            max-width: 8px;
+            width: var(--day-w, 8px);
+            min-width: var(--day-w, 8px);
+            max-width: var(--day-w, 8px);
             height: 8px;
             padding: 0;
             font-size: 0;
@@ -1881,9 +1916,9 @@
         }
 
         .calendar-table--compact thead th.day-header {
-            width: 8px;
-            min-width: 8px;
-            max-width: 8px;
+            width: var(--day-w, 8px);
+            min-width: var(--day-w, 8px);
+            max-width: var(--day-w, 8px);
             overflow: hidden;
             writing-mode: vertical-rl;
             transform: rotate(180deg);
