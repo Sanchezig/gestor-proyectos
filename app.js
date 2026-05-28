@@ -3344,9 +3344,17 @@ function sortDailyProjects(projects) {
                 const table     = container.querySelector('table');
                 const todayCell = table ? table.querySelector('tbody td.today-cell') : null;
                 if (!todayCell) { line.style.display = 'none'; return; }
+
+                // getBoundingClientRect da posición real en viewport; ajustamos al origen del contenedor
+                // y sumamos scrollLeft para obtener la posición absoluta dentro del área scrollable
+                const containerRect = container.getBoundingClientRect();
+                const cellRect      = todayCell.getBoundingClientRect();
+                const left = cellRect.left - containerRect.left + container.scrollLeft;
+
                 line.style.display = 'block';
-                line.style.left    = todayCell.offsetLeft + 'px';
-                line.style.height  = table.offsetHeight   + 'px';
+                line.style.left    = left + 'px';
+                line.style.width   = cellRect.width + 'px';  // ancho exacto de la celda
+                line.style.height  = table.offsetHeight + 'px';
             });
         }
 

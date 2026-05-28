@@ -1888,8 +1888,7 @@
         .today-line {
             position: absolute;
             top: 0;
-            width: var(--day-w, 8px);
-            box-sizing: border-box;
+            box-sizing: border-box;  /* el JS setea width; border-box hace que los bordes no desborden */
             background: rgba(255, 120, 0, 0.12);
             border-left:  1.5px solid rgba(255, 100, 0, 0.55);
             border-right: 1.5px solid rgba(255, 100, 0, 0.55);
