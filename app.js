@@ -3113,6 +3113,7 @@ function sortDailyProjects(projects) {
 
         function renderMonthCalendar() {
             const year = currentMonth.getFullYear();
+            const todayKey = formatDateKey(new Date());
 
             // Vista de 2 semestres apilados
             const semesters = [
@@ -3185,6 +3186,7 @@ function sortDailyProjects(projects) {
                             if (isHoliday) cellClass += ' holiday';
                             if (day === 1 && monthIndex > 0) cellClass += ' month-separator';
                             if (isSelected) cellClass += ' vacation-selected';
+                            if (dateKey === todayKey) cellClass += ' today-cell';
                             if (vacation) {
                                 if (vacation.vacation_type === 'current_year') cellClass += ' vacation-current-year';
                                 else if (vacation.vacation_type === 'previous_year') cellClass += ' vacation-previous-year';
@@ -3199,7 +3201,7 @@ function sortDailyProjects(projects) {
                     html += `</tr>`;
                 });
 
-                html += `</tbody></table></div></div>`;
+                html += `</tbody></table><div class="today-line"></div></div></div>`;
             });
 
             return html;
@@ -3331,6 +3333,20 @@ function sortDailyProjects(projects) {
                 t.style.setProperty('--day-w',     w    + 'px');
                 t.style.setProperty('--day-font',  font + 'px');
                 t.style.setProperty('--day-hdr-h', hdrH + 'px');
+            });
+            // Reposicionar línea de hoy (el ancho de celda puede haber cambiado)
+            requestAnimationFrame(positionTodayLines);
+        }
+
+        function positionTodayLines() {
+            document.querySelectorAll('.today-line').forEach(line => {
+                const container = line.parentElement;
+                const table     = container.querySelector('table');
+                const todayCell = table ? table.querySelector('tbody td.today-cell') : null;
+                if (!todayCell) { line.style.display = 'none'; return; }
+                line.style.display = 'block';
+                line.style.left    = todayCell.offsetLeft + 'px';
+                line.style.height  = table.offsetHeight   + 'px';
             });
         }
 

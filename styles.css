@@ -1884,6 +1884,19 @@
             padding: 0 3px;
         }
 
+        /* ===== LÍNEA DE HOY ===== */
+        .today-line {
+            position: absolute;
+            top: 0;
+            width: var(--day-w, 8px);
+            background: rgba(255, 120, 0, 0.12);
+            border-left:  1.5px solid rgba(255, 100, 0, 0.55);
+            border-right: 1.5px solid rgba(255, 100, 0, 0.55);
+            pointer-events: none;
+            z-index: 8;
+            display: none;
+        }
+
         /* ===== VISTA POR SEMESTRES ===== */
         .semester-block {
             margin-bottom: 20px;
