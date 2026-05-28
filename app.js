@@ -216,9 +216,9 @@ function handlePrereqClick(event, projectId, prereqName) {
         let sidebarAutoCollapsed = false; // Indica si el sidebar fue colapsado automáticamente por la vista Equipo
         let calendarZoom = 0; // 0=compact(8px) 1=medium(16px) 2=detail(28px)
         const ZOOM_LEVELS = [
-            { w: 8,  font: 0,   hdrH: 0  },   // compact: números ocultos
-            { w: 16, font: 7,   hdrH: 22 },   // medium:  números pequeños
-            { w: 28, font: 10,  hdrH: 30 },   // detail:  números legibles
+            { w: 8,  font: 6,   hdrH: 18 },   // compact: números pequeños
+            { w: 16, font: 8,   hdrH: 24 },   // medium:  números más grandes
+            { w: 28, font: 10,  hdrH: 30 },   // detail:  números claramente legibles
         ];
         const teamMembers = ['IS', 'HR', 'PU', 'AR', 'MR', 'AP']; // Ajusta según tu equipo
         const excludedResponsibles = ['DH'];

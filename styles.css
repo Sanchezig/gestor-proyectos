@@ -1943,8 +1943,19 @@
         }
 
         /* Separador de mes más fino en vista compacta */
-        .calendar-table--compact tbody td.month-separator,
-        .calendar-table--compact thead th.month-separator {
+        .calendar-table--compact tbody td.month-separator {
+            border-left: 2px solid #7a1ea2 !important;
+        }
+
+        /* El th.day-header está rotado 180°: border-left queda visual-derecha,
+           por eso usamos border-right para que el separador quede ANTES del día 1 */
+        .calendar-table--compact thead th.day-header.month-separator {
+            border-right: 2px solid #7a1ea2 !important;
+            border-left: none !important;
+        }
+
+        /* Para el th.month-header el separador sí es border-left normal */
+        .calendar-table--compact thead th.month-header.month-separator {
             border-left: 2px solid #7a1ea2 !important;
         }
 
