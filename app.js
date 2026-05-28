@@ -3106,6 +3106,8 @@ function sortDailyProjects(projects) {
             // html += renderTeamStats(); // <-- Comenta o borra esta línea si no la quieres
 
             container.innerHTML = html;
+            // Aplicar el zoom actual tras cada render (las variables CSS se pierden al reescribir el DOM)
+            applyZoom();
         }
 
 
@@ -3323,14 +3325,18 @@ function sortDailyProjects(projects) {
             renderTeamView();
         }
 
-        function zoomCalendar(dir) {
-            calendarZoom = Math.max(0, Math.min(ZOOM_LEVELS.length - 1, calendarZoom + dir));
+        function applyZoom() {
             const { w, font, hdrH } = ZOOM_LEVELS[calendarZoom];
             document.querySelectorAll('.calendar-table--compact').forEach(t => {
-                t.style.setProperty('--day-w',    w    + 'px');
-                t.style.setProperty('--day-font', font + 'px');
+                t.style.setProperty('--day-w',     w    + 'px');
+                t.style.setProperty('--day-font',  font + 'px');
                 t.style.setProperty('--day-hdr-h', hdrH + 'px');
             });
+        }
+
+        function zoomCalendar(dir) {
+            calendarZoom = Math.max(0, Math.min(ZOOM_LEVELS.length - 1, calendarZoom + dir));
+            applyZoom();
         }
 
         function previousYear() {
