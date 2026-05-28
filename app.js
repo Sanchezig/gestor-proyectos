@@ -3334,8 +3334,10 @@ function sortDailyProjects(projects) {
                 t.style.setProperty('--day-font',  font + 'px');
                 t.style.setProperty('--day-hdr-h', hdrH + 'px');
             });
-            // Reposicionar línea de hoy tras el layout (pequeño delay para que el browser calcule offsetLeft)
+            // Reposicionar línea de hoy: primer intento rápido + segundo de seguridad
+            // (en el primer render el layout puede no estar listo a los 50ms)
             setTimeout(positionTodayLines, 50);
+            setTimeout(positionTodayLines, 600);
         }
 
         function positionTodayLines() {
@@ -3345,16 +3347,12 @@ function sortDailyProjects(projects) {
                 const todayCell = table ? table.querySelector('tbody td.today-cell') : null;
                 if (!todayCell) { line.style.display = 'none'; return; }
 
-                // getBoundingClientRect da posición real en viewport; ajustamos al origen del contenedor
-                // y sumamos scrollLeft para obtener la posición absoluta dentro del área scrollable
-                const containerRect = container.getBoundingClientRect();
-                const cellRect      = todayCell.getBoundingClientRect();
-                const left = cellRect.left - containerRect.left + container.scrollLeft;
-
+                // offsetLeft es relativo al offsetParent = .calendar-scroll-container (position:relative)
+                // offsetWidth captura el ancho real de la celda incluyendo borders
                 line.style.display = 'block';
-                line.style.left    = left + 'px';
-                line.style.width   = cellRect.width + 'px';  // ancho exacto de la celda
-                line.style.height  = table.offsetHeight + 'px';
+                line.style.left   = todayCell.offsetLeft + 'px';
+                line.style.width  = todayCell.offsetWidth + 'px';
+                line.style.height = table.offsetHeight + 'px';
             });
         }
 
