@@ -1889,6 +1889,7 @@
             position: absolute;
             top: 0;
             width: var(--day-w, 8px);
+            box-sizing: border-box;
             background: rgba(255, 120, 0, 0.12);
             border-left:  1.5px solid rgba(255, 100, 0, 0.55);
             border-right: 1.5px solid rgba(255, 100, 0, 0.55);

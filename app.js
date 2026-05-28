@@ -3334,8 +3334,8 @@ function sortDailyProjects(projects) {
                 t.style.setProperty('--day-font',  font + 'px');
                 t.style.setProperty('--day-hdr-h', hdrH + 'px');
             });
-            // Reposicionar línea de hoy (el ancho de celda puede haber cambiado)
-            requestAnimationFrame(positionTodayLines);
+            // Reposicionar línea de hoy tras el layout (pequeño delay para que el browser calcule offsetLeft)
+            setTimeout(positionTodayLines, 50);
         }
 
         function positionTodayLines() {
