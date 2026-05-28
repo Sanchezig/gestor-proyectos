@@ -1855,31 +1855,33 @@
         }
 
         .zoom-btn {
-            width: 26px;
-            height: 26px;
+            width: 28px;
+            height: 28px;
             border-radius: 6px;
-            border: 1.5px solid rgba(255,255,255,0.25);
-            background: rgba(255,255,255,0.12);
-            color: #f8f4ff;
-            font-size: 16px;
+            border: 1.5px solid #d5c7f0;
+            background: #f3ecff;
+            color: #7a1ea2;
+            font-size: 18px;
             font-weight: 600;
             line-height: 1;
             cursor: pointer;
-            transition: background 150ms;
+            transition: all 150ms;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
         .zoom-btn:hover {
-            background: rgba(255,255,255,0.25);
+            background: #7a1ea2;
+            color: white;
+            border-color: #7a1ea2;
         }
 
         .zoom-label {
             font-size: 11px;
-            color: rgba(255,255,255,0.6);
+            color: #999;
             letter-spacing: 0.5px;
-            padding: 0 2px;
+            padding: 0 3px;
         }
 
         /* ===== VISTA POR SEMESTRES ===== */
