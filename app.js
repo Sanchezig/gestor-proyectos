@@ -214,8 +214,12 @@ function handlePrereqClick(event, projectId, prereqName) {
         let selectedVacationDays = []; // Rastrear días seleccionados para vacaciones
         let currentMonth = new Date();
         let sidebarAutoCollapsed = false; // Indica si el sidebar fue colapsado automáticamente por la vista Equipo
-        let calendarZoom = 1; // 1=compact(8px) 2=medium(16px) 3=detail(28px)
-        const ZOOM_SIZES = [8, 16, 28];
+        let calendarZoom = 0; // 0=compact(8px) 1=medium(16px) 2=detail(28px)
+        const ZOOM_LEVELS = [
+            { w: 8,  font: 0,   hdrH: 0  },   // compact: números ocultos
+            { w: 16, font: 7,   hdrH: 22 },   // medium:  números pequeños
+            { w: 28, font: 10,  hdrH: 30 },   // detail:  números legibles
+        ];
         const teamMembers = ['IS', 'HR', 'PU', 'AR', 'MR', 'AP']; // Ajusta según tu equipo
         const excludedResponsibles = ['DH'];
 
@@ -3320,10 +3324,12 @@ function sortDailyProjects(projects) {
         }
 
         function zoomCalendar(dir) {
-            calendarZoom = Math.max(0, Math.min(ZOOM_SIZES.length - 1, calendarZoom + dir));
-            const size = ZOOM_SIZES[calendarZoom];
+            calendarZoom = Math.max(0, Math.min(ZOOM_LEVELS.length - 1, calendarZoom + dir));
+            const { w, font, hdrH } = ZOOM_LEVELS[calendarZoom];
             document.querySelectorAll('.calendar-table--compact').forEach(t => {
-                t.style.setProperty('--day-w', size + 'px');
+                t.style.setProperty('--day-w',    w    + 'px');
+                t.style.setProperty('--day-font', font + 'px');
+                t.style.setProperty('--day-hdr-h', hdrH + 'px');
             });
         }
 

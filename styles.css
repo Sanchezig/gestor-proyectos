@@ -1921,11 +1921,12 @@
             width: var(--day-w, 8px);
             min-width: var(--day-w, 8px);
             max-width: var(--day-w, 8px);
+            height: var(--day-hdr-h, 0px);
             overflow: hidden;
             writing-mode: vertical-rl;
             transform: rotate(180deg);
-            font-size: 6px;
-            font-weight: 400;
+            font-size: var(--day-font, 0px);
+            font-weight: 500;
             padding: 3px 0;
             color: #ffffff;
             background: #2a1b4a;
