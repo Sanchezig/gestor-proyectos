@@ -81,6 +81,8 @@ function handlePrereqClick(event, projectId, prereqName) {
             isOpen: false,
             editNoteId: null
         };
+        let weeklyTasks = [];
+        let incidents = [];
         let currentUser = null; // valor inicial por defecto
         const APP_LOGIN_PASSWORD = 'admin123';
         const APP_LOGIN_STORAGE_KEY = 'wtw_login_session_v1';
@@ -1473,6 +1475,7 @@ function handleCapacityWheel(event, userInitials, weekKey, currentValue) {
 // =====================================================
 
 let capacityWeekStart = getMonday(new Date());
+let weeklyTasksWeekStart = getMonday(new Date());
 let projectCapacities = [];
 
 async function loadCapacities() {
@@ -1637,6 +1640,148 @@ function renderCapacityWidget() {
             }
         }
 
+        // =====================================================
+        // ================= WEEKLY WIDGET =====================
+        // =====================================================
+
+        function previousWeeklyWeek() {
+            weeklyTasksWeekStart.setDate(weeklyTasksWeekStart.getDate() - 7);
+            renderWeeklyWidgetInPlace();
+        }
+
+        function nextWeeklyWeek() {
+            weeklyTasksWeekStart.setDate(weeklyTasksWeekStart.getDate() + 7);
+            renderWeeklyWidgetInPlace();
+        }
+
+        function renderWeeklyWidgetInPlace() {
+            const existing = document.getElementById('weeklyWidget');
+            if (existing) {
+                const parent = existing.parentElement;
+                existing.remove();
+                parent.insertAdjacentHTML('afterbegin', renderWeeklyWidget());
+            }
+        }
+
+        async function addWeeklyTask() {
+            const input = document.getElementById('weeklyNewTask');
+            if (!input) return;
+            const text = input.value.trim();
+            if (!text || !currentProjectId) return;
+
+            const weekKey = formatDateKey(weeklyTasksWeekStart);
+            const position = weeklyTasks.filter(t => t.projectId === currentProjectId && t.weekStart === weekKey).length;
+
+            const { error } = await supabaseClient
+                .from('project_weekly_tasks')
+                .insert({
+                    project_id: currentProjectId,
+                    week_start: weekKey,
+                    text: text,
+                    done: false,
+                    position: position,
+                    created_by: currentUser || 'US'
+                });
+
+            if (error) { console.error('Error añadiendo tarea semanal:', error); return; }
+            await loadWeeklyTasks();
+            renderWeeklyWidgetInPlace();
+        }
+
+        async function toggleWeeklyTask(id, done) {
+            const { error } = await supabaseClient
+                .from('project_weekly_tasks')
+                .update({ done: done })
+                .eq('id', id);
+
+            if (error) { console.error(error); return; }
+            await loadWeeklyTasks();
+            renderWeeklyWidgetInPlace();
+        }
+
+        async function deleteWeeklyTask(id) {
+            const { error } = await supabaseClient
+                .from('project_weekly_tasks')
+                .delete()
+                .eq('id', id);
+
+            if (error) { console.error(error); return; }
+            await loadWeeklyTasks();
+            renderWeeklyWidgetInPlace();
+        }
+
+        function renderWeeklyWidget() {
+            if (!currentProjectId) return '';
+
+            const weekKey = formatDateKey(weeklyTasksWeekStart);
+            const tasks = (weeklyTasks || []).filter(t => t.projectId === currentProjectId && t.weekStart === weekKey);
+
+            const todayMonday = getMonday(new Date());
+            const isCurrentWeek = weekKey === formatDateKey(todayMonday);
+
+            const start = new Date(weeklyTasksWeekStart);
+            const end = new Date(weeklyTasksWeekStart);
+            end.setDate(end.getDate() + 6);
+            const weekLabel = `${start.getDate()}/${start.getMonth() + 1} — ${end.getDate()}/${end.getMonth() + 1}`;
+
+            // ISO week number
+            const tmp = new Date(Date.UTC(start.getFullYear(), start.getMonth(), start.getDate()));
+            const dayNum = tmp.getUTCDay() || 7;
+            tmp.setUTCDate(tmp.getUTCDate() + 4 - dayNum);
+            const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+            const weekNum = Math.ceil((((tmp - yearStart) / 86400000) + 1) / 7);
+
+            const done = tasks.filter(t => t.done).length;
+            const total = tasks.length;
+            const pct = total > 0 ? Math.round(done / total * 100) : 0;
+
+            let html = `<div class="widget-box weekly-widget" id="weeklyWidget">
+        <div class="widget-header">
+            <div class="widget-title">📋 Weekly</div>
+            ${total > 0 ? `<span class="weekly-count-badge">${done}/${total}</span>` : ''}
+        </div>
+        <div class="weekly-week-nav">
+            <button onclick="previousWeeklyWeek()">◀</button>
+            <div class="weekly-week-info">
+                <span class="weekly-week-num">Sem. ${weekNum}</span>
+                <span class="weekly-week-dates">${weekLabel}</span>
+                ${isCurrentWeek ? '<span class="week-current-badge">Actual</span>' : ''}
+            </div>
+            <button onclick="nextWeeklyWeek()">▶</button>
+        </div>`;
+
+            if (total > 0) {
+                html += `<div class="weekly-progress-bar"><div class="weekly-progress-fill" style="width:${pct}%"></div></div>`;
+            }
+
+            html += `<div class="weekly-tasks-list">`;
+
+            if (!tasks.length) {
+                html += `<div class="empty-state" style="font-size:12px; margin:4px 0 8px;">Sin objetivos esta semana. Añade el primero abajo.</div>`;
+            } else {
+                tasks.forEach(task => {
+                    html += `
+                <div class="weekly-task-item${task.done ? ' task-done' : ''}">
+                    <label class="weekly-task-check">
+                        <input type="checkbox" ${task.done ? 'checked' : ''} onchange="toggleWeeklyTask('${task.id}', this.checked)">
+                    </label>
+                    <span class="weekly-task-text">${escapeHtml(task.text)}</span>
+                    <button class="weekly-task-delete" onclick="deleteWeeklyTask('${task.id}')" title="Eliminar">×</button>
+                </div>`;
+                });
+            }
+
+            html += `</div>
+        <div class="weekly-add-row">
+            <input type="text" id="weeklyNewTask" class="weekly-new-task-input" placeholder="Nuevo objetivo..."
+                onkeydown="if(event.key==='Enter') addWeeklyTask()">
+            <button class="weekly-add-btn" onclick="addWeeklyTask()" title="Añadir">+</button>
+        </div>
+    </div>`;
+
+            return html;
+        }
+
 
         function closeCapacityWidget() {
             const widget = document.getElementById('capacityWidget');
@@ -1693,6 +1838,52 @@ function renderCapacityWidget() {
     }));
 }
 
+        async function loadWeeklyTasks() {
+    const { data, error } = await supabaseClient
+        .from('project_weekly_tasks')
+        .select('*')
+        .order('position', { ascending: true });
+
+    if (error) {
+        console.error('Error cargando tareas semanales:', formatSupabaseError(error, 'No se pudieron cargar tareas semanales'));
+        weeklyTasks = [];
+        return;
+    }
+
+    weeklyTasks = (data || []).map(t => ({
+        id: t.id,
+        projectId: t.project_id,
+        weekStart: t.week_start,
+        text: t.text || '',
+        done: !!t.done,
+        position: t.position || 0,
+        createdBy: t.created_by || 'US',
+        createdAt: t.created_at
+    }));
+}
+
+        async function loadIncidents() {
+    const { data, error } = await supabaseClient
+        .from('project_incidents')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error cargando incidencias:', formatSupabaseError(error, 'No se pudieron cargar incidencias'));
+        incidents = [];
+        return;
+    }
+
+    incidents = (data || []).map(i => ({
+        id: i.id,
+        projectId: i.project_id,
+        description: i.description || '',
+        resolved: !!i.resolved,
+        createdBy: i.created_by || 'US',
+        createdAt: i.created_at
+    }));
+}
+
 
         // Función para pintar el widget con Historial y Scroll
 function renderLastStatusWidget() {
@@ -1708,7 +1899,7 @@ function renderLastStatusWidget() {
     let html = `
     <div class="widget-box" style="display:flex; flex-direction:column;">
         <div class="capacity-widget-header">
-            <div class="capacity-widget-title">📢 Último Estado</div>
+            <div class="capacity-widget-title">📢 ÚLTIMO ESTADO</div>
         </div>
         
         <div id="status-display-area">`;
@@ -2002,6 +2193,107 @@ function renderLastStatusWidget() {
 
 
 
+
+
+        // =====================================================
+        // ================= INCIDENCIAS WIDGET ================
+        // =====================================================
+
+        function renderIncidentsWidgetInPlace() {
+            const existing = document.getElementById('incidentsWidget');
+            if (existing) {
+                const parent = existing.parentElement;
+                existing.remove();
+                parent.insertAdjacentHTML('afterbegin', renderIncidentsWidget());
+            }
+        }
+
+        async function addIncident() {
+            const input = document.getElementById('incidentNewText');
+            if (!input) return;
+            const description = input.value.trim();
+            if (!description || !currentProjectId) return;
+
+            const { error } = await supabaseClient
+                .from('project_incidents')
+                .insert({
+                    project_id: currentProjectId,
+                    description: description,
+                    resolved: false,
+                    created_by: currentUser || 'US'
+                });
+
+            if (error) { console.error('Error añadiendo incidencia:', error); return; }
+            await loadIncidents();
+            renderIncidentsWidgetInPlace();
+        }
+
+        async function toggleIncident(id, resolved) {
+            const { error } = await supabaseClient
+                .from('project_incidents')
+                .update({ resolved: resolved })
+                .eq('id', id);
+
+            if (error) { console.error(error); return; }
+            await loadIncidents();
+            renderIncidentsWidgetInPlace();
+        }
+
+        async function deleteIncident(id) {
+            const { error } = await supabaseClient
+                .from('project_incidents')
+                .delete()
+                .eq('id', id);
+
+            if (error) { console.error(error); return; }
+            await loadIncidents();
+            renderIncidentsWidgetInPlace();
+        }
+
+        function renderIncidentsWidget() {
+            if (!currentProjectId) return '';
+
+            const projectIncidents = (incidents || []).filter(i => i.projectId === currentProjectId);
+            const open = projectIncidents.filter(i => !i.resolved);
+            const resolvedList = projectIncidents.filter(i => i.resolved);
+            const all = [...open, ...resolvedList];
+
+            let html = `<div class="widget-box incidents-widget" id="incidentsWidget">
+        <div class="widget-header">
+            <div class="widget-title">&#9889; Incidencias</div>
+            ${open.length > 0 ? `<span class="incidents-open-badge">${open.length} abierta${open.length > 1 ? 's' : ''}</span>` : ''}
+        </div>
+        <div class="incidents-list">`;
+
+            if (!all.length) {
+                html += `<div class="empty-state" style="font-size:12px; margin:4px 0 8px;">Sin incidencias registradas.</div>`;
+            } else {
+                all.forEach(incident => {
+                    const dateStr = new Date(incident.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' });
+                    html += `
+                <div class="incident-item ${incident.resolved ? 'incident-resolved' : 'incident-open'}">
+                    <label class="incident-check" title="${incident.resolved ? 'Reabrir' : 'Marcar resuelta'}">
+                        <input type="checkbox" ${incident.resolved ? 'checked' : ''} onchange="toggleIncident('${incident.id}', this.checked)">
+                    </label>
+                    <div class="incident-content">
+                        <span class="incident-text">${escapeHtml(incident.description)}</span>
+                        <span class="incident-meta">${dateStr}${incident.createdBy ? ` &middot; ${escapeHtml(incident.createdBy)}` : ''}</span>
+                    </div>
+                    <button class="incident-delete" onclick="deleteIncident('${incident.id}')" title="Eliminar">&times;</button>
+                </div>`;
+                });
+            }
+
+            html += `</div>
+        <div class="weekly-add-row">
+            <input type="text" id="incidentNewText" class="weekly-new-task-input" placeholder="Describir incidencia..."
+                onkeydown="if(event.key==='Enter') addIncident()">
+            <button class="weekly-add-btn" onclick="addIncident()" title="A&ntilde;adir">+</button>
+        </div>
+    </div>`;
+
+            return html;
+        }
 
 
         // =====================================================
@@ -2306,12 +2598,14 @@ function renderLastStatusWidget() {
 
             let rightSidebarHtml = `
     <div class="right-sidebar">
-        <div class="right-sidebar-top-row">
+        <div class="right-sidebar-left-col">
             <div class="right-sidebar-col">${renderCapacityWidget()}</div>
-            <div class="right-sidebar-col">${renderProjectNotesWidget()}</div>
-        </div>
-        <div class="right-sidebar-bottom-row">
             <div class="right-sidebar-col">${renderLastStatusWidget()}</div>
+        </div>
+        <div class="right-sidebar-right-col">
+            <div class="right-sidebar-col">${renderProjectNotesWidget()}</div>
+            <div class="right-sidebar-col">${renderWeeklyWidget()}</div>
+            <div class="right-sidebar-col">${renderIncidentsWidget()}</div>
         </div>
     </div>
 `;
@@ -2931,6 +3225,8 @@ function sortDailyProjects(projects) {
             await loadCapacities();
             await loadProjectStatuses();
             await loadProjectNotes();
+            await loadWeeklyTasks();
+            await loadIncidents();
             const { data: projData, error: projError } = await supabaseClient
                 .from('projects')
                 .select('*')
@@ -3062,6 +3358,29 @@ function sortDailyProjects(projects) {
                 { event: '*', schema: 'public', table: 'project_notes' },
                 async () => {
                     await loadDataFromSupabase();
+                }
+            )
+            .subscribe();
+
+        let weeklyTasksChannel = supabaseClient.channel('weekly-tasks-changes');
+        let incidentsChannel = supabaseClient.channel('incidents-changes');
+
+        weeklyTasksChannel
+            .on('postgres_changes',
+                { event: '*', schema: 'public', table: 'project_weekly_tasks' },
+                async () => {
+                    await loadWeeklyTasks();
+                    renderWeeklyWidgetInPlace();
+                }
+            )
+            .subscribe();
+
+        incidentsChannel
+            .on('postgres_changes',
+                { event: '*', schema: 'public', table: 'project_incidents' },
+                async () => {
+                    await loadIncidents();
+                    renderIncidentsWidgetInPlace();
                 }
             )
             .subscribe();
