@@ -248,12 +248,24 @@ function handlePrereqClick(event, projectId, prereqName) {
         let currentWeekStart = getMonday(new Date());
         let editingCommentId = null;
         let commentsListContext = { projectId: null, dateKey: null };
+        let expandedCommentThreads = new Set();
+        let activeReplyCommentId = null;
         let dailyFilters = {
             proyecto: '',
-            estado: '',
+            estados: [],
             fechaInicio: '',
             responsibles: []
         };
+        let dailyEstadoDropdownOpen = false;
+
+        function handleEstadoDropdownOutsideClick(e) {
+            const wrapper = document.querySelector('.estado-filter-wrapper');
+            if (!wrapper || !wrapper.contains(e.target)) {
+                document.removeEventListener('click', handleEstadoDropdownOutsideClick);
+                dailyEstadoDropdownOpen = false;
+                renderDaily();
+            }
+        }
 
         function syncTeamMembersInSelectors() {
             const responsibleSelect = document.getElementById('commentResponsible');
@@ -741,10 +753,9 @@ function setDailyViewMode(mode) {
                 );
             }
 
-            if (dailyFilters.estado && dailyFilters.estado.trim()) {
-                const estadoFiltro = dailyFilters.estado.trim();
+            if (dailyFilters.estados && dailyFilters.estados.length > 0) {
                 filteredProjects = filteredProjects.filter(
-                    p => (p.phase || 'Sin fase') === estadoFiltro
+                    p => dailyFilters.estados.includes(p.phase || 'Sin fase')
                 );
             }
 
@@ -826,13 +837,30 @@ function setDailyViewMode(mode) {
                 'value="' + dailyFilters.proyecto + '" ' +
                 'oninput="onFilterChange(\'proyecto\', this.value)"></th>';
 
-            html += '<th><select class="filter-select" onchange="onFilterChange(\'estado\', this.value)">' +
-                '<option value="">Todos</option>';
-            estadosUnicos.forEach(est => {
-                const sel = dailyFilters.estado === est ? 'selected' : '';
-                html += '<option value="' + est + '" ' + sel + '>' + est + '</option>';
-            });
-            html += '</select></th>';
+            {
+                const selCount = dailyFilters.estados.length;
+                const allSel = selCount === estadosUnicos.length && selCount > 0;
+                const btnLabel = selCount === 0 ? 'Todos' : selCount === 1 ? dailyFilters.estados[0] : selCount + ' estados';
+                const hasActive = selCount > 0 ? ' active' : '';
+                let estadoHtml = `<div class="estado-filter-wrapper">
+  <button class="estado-filter-btn${hasActive}" onclick="event.stopPropagation();toggleDailyEstadoDropdown()">${btnLabel} <span class="estado-arrow">&#9660;</span></button>`;
+                if (dailyEstadoDropdownOpen) {
+                    const jsonEstados = JSON.stringify(estadosUnicos).replace(/"/g, '&quot;');
+                    estadoHtml += `<div class="estado-filter-dropdown" onclick="event.stopPropagation()">
+  <label class="estado-filter-option estado-filter-selectall">
+    <input type="checkbox" ${allSel ? 'checked' : ''} onchange="toggleDailyEstadoAll(${jsonEstados})">
+    <span>(Seleccionar todo)</span>
+  </label>
+  <div class="estado-filter-separator"></div>`;
+                    estadosUnicos.forEach(est => {
+                        const chk = dailyFilters.estados.includes(est) ? 'checked' : '';
+                        estadoHtml += `<label class="estado-filter-option"><input type="checkbox" ${chk} data-estado="${escapeHtml(est)}" onchange="toggleDailyEstadoFilter(this.dataset.estado)"><span>${est}</span></label>`;
+                    });
+                    estadoHtml += '</div>';
+                }
+                estadoHtml += '</div>';
+                html += '<th style="position:relative;overflow:visible;">' + estadoHtml + '</th>';
+            }
 
             html += '<th><input class="filter-input" type="date" ' +
                 'value="' + dailyFilters.fechaInicio + '" ' +
@@ -893,8 +921,12 @@ function setDailyViewMode(mode) {
                         const cellComments = dailyComments.filter(c =>
                             c.projectId === project.id && c.date === dateKey
                         );
+                        const topLevelComments = cellComments.filter(c => !c.parentId);
+                        const replyComments = cellComments.filter(c => !!c.parentId);
+                        const threadsWithReplies = new Set(replyComments.map(r => r.parentId)).size;
+
                         // Mostrar resaltado solo si hay comentarios pendientes asignados al usuario actual o sin responsable
-                        const userPendingComments = cellComments.filter(c => 
+                        const userPendingComments = topLevelComments.filter(c => 
                             !c.completed && (c.responsible === currentUser || !c.responsible)
                         );
                         const hasCells = userPendingComments.length > 0;
@@ -907,11 +939,12 @@ function setDailyViewMode(mode) {
 
                         let previewText = '';
                         let metaText = '';
-                        if (cellComments.length > 0) {
-                            const latest = cellComments.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+                        if (topLevelComments.length > 0) {
+                            const latest = topLevelComments.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
                             const shortText = latest.text.length > 60 ? latest.text.slice(0, 60) + '…' : latest.text;
                             previewText = shortText.replace(/\n/g, ' ');
-                            metaText = `${cellComments.length} comentario(s) · ${latest.urgency}${latest.hasIncident ? ' · INCIDENCIA' : ''}`;
+                            const threadBadge = threadsWithReplies > 0 ? ` · <span class="cell-thread-badge">💬 ${threadsWithReplies}</span>` : '';
+                            metaText = `${topLevelComments.length} comentario(s) · ${latest.urgency}${latest.hasIncident ? ' · INCIDENCIA' : ''}${threadBadge}`;
                         }
 
                         html += `<td class="${cellClass}">
@@ -919,7 +952,7 @@ function setDailyViewMode(mode) {
                             <div class="daily-cell-preview">${previewText}</div>
                             ${metaText ? `<div class="daily-cell-meta">${metaText}</div>` : ''}
                             <div class="daily-actions">
-                                ${cellComments.length > 0 ? `<button class="daily-action-btn" onclick="openCommentsList(event, '${project.id}', '${dateKey}')">Ver</button>` : ''}
+                                ${topLevelComments.length > 0 ? `<button class="daily-action-btn" onclick="openCommentsList(event, '${project.id}', '${dateKey}')">Ver</button>` : ''}
                                 <button class="daily-action-btn" onclick="openDailyCommentModalFromCell(event, '${project.id}', '${dateKey}')">+</button>
                             </div>
                         </div>
@@ -932,6 +965,10 @@ function setDailyViewMode(mode) {
 
             html += '</tbody></table>';
             document.getElementById('dailyTableContainer').innerHTML = html;
+            document.removeEventListener('click', handleEstadoDropdownOutsideClick);
+            if (dailyEstadoDropdownOpen) {
+                setTimeout(() => document.addEventListener('click', handleEstadoDropdownOutsideClick), 0);
+            }
         }
 
 
@@ -978,6 +1015,30 @@ function setDailyViewMode(mode) {
     }, 0);
   }
 }
+
+        function toggleDailyEstadoDropdown() {
+            dailyEstadoDropdownOpen = !dailyEstadoDropdownOpen;
+            renderDaily();
+        }
+
+        function toggleDailyEstadoFilter(value) {
+            const idx = dailyFilters.estados.indexOf(value);
+            if (idx === -1) {
+                dailyFilters.estados.push(value);
+            } else {
+                dailyFilters.estados.splice(idx, 1);
+            }
+            renderDaily();
+        }
+
+        function toggleDailyEstadoAll(estadosUnicos) {
+            if (dailyFilters.estados.length === estadosUnicos.length) {
+                dailyFilters.estados = [];
+            } else {
+                dailyFilters.estados = [...estadosUnicos];
+            }
+            renderDaily();
+        }
 
         function onResponsiblesFilterChange(selectElement) {
             // El select múltiple devuelve solo el último valor seleccionado
@@ -1179,29 +1240,50 @@ function setDailyViewMode(mode) {
             event.stopPropagation();
             commentsListContext.projectId = projectId;
             commentsListContext.dateKey = dateKey;
+            renderCommentsListContent(projectId, dateKey);
+            document.getElementById('commentsListModal').classList.add('active');
+        }
 
-            const comments = dailyComments
-                .filter(c => c.projectId === projectId && c.date === dateKey)
+        function renderCommentsListContent(projectId, dateKey) {
+            const allComments = dailyComments.filter(c => c.projectId === projectId && c.date === dateKey);
+            const topLevel = allComments
+                .filter(c => !c.parentId)
                 .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
+            const repliesMap = {};
+            allComments
+                .filter(c => c.parentId)
+                .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+                .forEach(r => {
+                    if (!repliesMap[r.parentId]) repliesMap[r.parentId] = [];
+                    repliesMap[r.parentId].push(r);
+                });
+
             const container = document.getElementById('commentsListContainer');
-            if (comments.length === 0) {
+            if (topLevel.length === 0) {
                 container.innerHTML = '<div class="empty-state" style="padding: 12px;">Sin comentarios para este día.</div>';
-            } else {
-                let html = `<div class="comments-box">`;
-                comments.forEach(c => {
-                    const dateObj = new Date(c.date + 'T00:00:00');
-                    const dd = String(dateObj.getDate()).padStart(2, '0');
-                    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-                    const yy = String(dateObj.getFullYear()).slice(-2);
-                    const formattedDate = `${dd}/${mm}/${yy}`;
+                return;
+            }
 
-                    const completedClass = c.completed ? 'completed' : '';
-                    const completedBadge = c.completed ? '<span class="completion-badge">✓ COMPLETADA</span>' : '';
+            let html = `<div class="comments-box">`;
+            topLevel.forEach(c => {
+                const replies = repliesMap[c.id] || [];
+                const hasReplies = replies.length > 0;
+                const isExpanded = expandedCommentThreads.has(c.id);
+                const isReplying = activeReplyCommentId === c.id;
 
-                    html += `<div class="comment-entry ${completedClass}">
+                const dateObj = new Date(c.date + 'T00:00:00');
+                const dd = String(dateObj.getDate()).padStart(2, '0');
+                const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+                const yy = String(dateObj.getFullYear()).slice(-2);
+                const formattedDate = `${dd}/${mm}/${yy}`;
+
+                const completedClass = c.completed ? 'completed' : '';
+                const completedBadge = c.completed ? '<span class="completion-badge">✓ COMPLETADA</span>' : '';
+
+                html += `<div class="comment-entry ${completedClass}">
                 <div class="comment-checkbox-wrapper">
-                    <input type="checkbox" class="comment-checkbox" 
+                    <input type="checkbox" class="comment-checkbox"
                            ${c.completed ? 'checked' : ''}
                            onclick="toggleCommentCompletion(event, '${c.id}')">
                     <div style="flex: 1;">
@@ -1211,18 +1293,200 @@ function setDailyViewMode(mode) {
                     </div>
                 </div>
                 <div class="comment-actions">
+                    <button class="comment-action-btn comment-reply-btn" onclick="toggleReplyForm('${c.id}')">↩ Responder</button>
                     <button class="comment-action-btn" onclick="editComment('${c.id}')">✏️ Editar</button>
                     <button class="comment-action-btn" onclick="deleteComment('${c.id}')">🗑️ Borrar</button>
-                </div>
-            </div>`;
-                });
+                </div>`;
+
+                if (hasReplies) {
+                    html += `<div class="comment-thread-footer">
+                    <button class="comment-action-btn comment-thread-btn" onclick="toggleCommentThread('${c.id}')">💬 ${replies.length} ${replies.length === 1 ? 'respuesta' : 'respuestas'} ${isExpanded ? '▲' : '▼'}</button>
+                </div>`;
+                }
+
+                if (isReplying) {
+                    html += `<div class="reply-form">
+                    <textarea class="reply-textarea" id="replyText_${c.id}" placeholder="Escribe tu respuesta..." rows="2"></textarea>
+                    <div class="reply-form-actions">
+                        <button class="comment-action-btn btn-reply-send" onclick="saveCommentReply('${c.id}', '${projectId}', '${dateKey}')">Enviar</button>
+                        <button class="comment-action-btn" onclick="cancelReplyForm()">Cancelar</button>
+                    </div>
+                </div>`;
+                }
+
+                if (isExpanded && hasReplies) {
+                    html += `<div class="comment-replies">`;
+                    replies.forEach(r => {
+                        const rdateObj = new Date(r.date + 'T00:00:00');
+                        const rdd = String(rdateObj.getDate()).padStart(2, '0');
+                        const rmm = String(rdateObj.getMonth() + 1).padStart(2, '0');
+                        const ryy = String(rdateObj.getFullYear()).slice(-2);
+                        const rDate = `${rdd}/${rmm}/${ryy}`;
+                        const rTime = r.time || '';
+                        html += `<div class="reply-entry">
+                        <div class="reply-thread-line"></div>
+                        <div class="reply-body">
+                            <div class="reply-header">${rDate} ${rTime} · <strong>${escapeHtml(r.userName || 'ND')}</strong></div>
+                            <div class="reply-text">${escapeHtml(r.text).replace(/\n/g, '<br>')}</div>
+                            <button class="comment-action-btn reply-delete-btn" onclick="deleteComment('${r.id}')">🗑️</button>
+                        </div>
+                    </div>`;
+                    });
+                    html += '</div>';
+                }
 
                 html += '</div>';
-                container.innerHTML = html;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+
+            if (isReplying_focus_id) {
+                setTimeout(() => {
+                    const ta = document.getElementById('replyText_' + isReplying_focus_id);
+                    if (ta) ta.focus();
+                }, 0);
+                isReplying_focus_id = null;
+            }
+        }
+
+        let isReplying_focus_id = null;
+
+        function toggleCommentThread(commentId) {
+            if (expandedCommentThreads.has(commentId)) {
+                expandedCommentThreads.delete(commentId);
+            } else {
+                expandedCommentThreads.add(commentId);
+            }
+            const { projectId, dateKey } = commentsListContext;
+            renderCommentsListContent(projectId, dateKey);
+        }
+
+        function toggleReplyForm(commentId) {
+            if (activeReplyCommentId === commentId) {
+                activeReplyCommentId = null;
+            } else {
+                activeReplyCommentId = commentId;
+                expandedCommentThreads.add(commentId);
+                isReplying_focus_id = commentId;
+            }
+            const { projectId, dateKey } = commentsListContext;
+            renderCommentsListContent(projectId, dateKey);
+        }
+
+        function cancelReplyForm() {
+            activeReplyCommentId = null;
+            const { projectId, dateKey } = commentsListContext;
+            renderCommentsListContent(projectId, dateKey);
+        }
+
+        async function saveCommentReply(parentId, projectId, dateKey) {
+            const ta = document.getElementById('replyText_' + parentId);
+            if (!ta) return;
+            const text = ta.value.trim();
+            if (!text) { ta.focus(); return; }
+
+            const now = new Date();
+            const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+            const newId = generateId();
+
+            const { error } = await supabaseClient
+                .from('daily_comments')
+                .insert({
+                    id: newId,
+                    project_id: projectId,
+                    date: dateKey,
+                    time: timeStr,
+                    responsible: currentUser,
+                    urgency: 'Normal',
+                    has_incident: false,
+                    user_name: currentUser,
+                    text,
+                    parent_id: parentId
+                });
+
+            if (error) {
+                console.error(error);
+                alert('Error guardando respuesta');
+                return;
             }
 
-            document.getElementById('commentsListModal').classList.add('active');
+            activeReplyCommentId = null;
+            expandedCommentThreads.add(parentId);
+            await loadDataFromSupabase(true);
+            renderCommentsListContent(projectId, dateKey);
         }
+
+        function toggleCommentThreadFromFicha(commentId) {
+            if (expandedCommentThreads.has(commentId)) {
+                expandedCommentThreads.delete(commentId);
+            } else {
+                expandedCommentThreads.add(commentId);
+            }
+            renderFicha();
+        }
+
+        function toggleReplyFormFromFicha(commentId) {
+            if (activeReplyCommentId === commentId) {
+                activeReplyCommentId = null;
+                renderFicha();
+                return;
+            }
+
+            activeReplyCommentId = commentId;
+            expandedCommentThreads.add(commentId);
+            renderFicha();
+            setTimeout(() => {
+                const ta = document.getElementById('replyTextFicha_' + commentId);
+                if (ta) ta.focus();
+            }, 0);
+        }
+
+        function cancelReplyFormFromFicha() {
+            activeReplyCommentId = null;
+            renderFicha();
+        }
+
+        async function saveCommentReplyFromFicha(parentId, projectId, dateKey) {
+            const ta = document.getElementById('replyTextFicha_' + parentId);
+            if (!ta) return;
+            const text = ta.value.trim();
+            if (!text) {
+                ta.focus();
+                return;
+            }
+
+            const now = new Date();
+            const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+            const newId = generateId();
+
+            const { error } = await supabaseClient
+                .from('daily_comments')
+                .insert({
+                    id: newId,
+                    project_id: projectId,
+                    date: dateKey,
+                    time: timeStr,
+                    responsible: currentUser,
+                    urgency: 'Normal',
+                    has_incident: false,
+                    user_name: currentUser,
+                    text,
+                    parent_id: parentId
+                });
+
+            if (error) {
+                console.error(error);
+                alert('Error guardando respuesta');
+                return;
+            }
+
+            activeReplyCommentId = null;
+            expandedCommentThreads.add(parentId);
+            await loadDataFromSupabase(true);
+            renderFicha();
+        }
+
+
 
         // ========== AÑADIR AQUÍ LA NUEVA FUNCIÓN ==========
         async function toggleCommentCompletion(event, commentId) {
@@ -1249,7 +1513,7 @@ function setDailyViewMode(mode) {
 
             const { projectId, dateKey } = commentsListContext;
             if (projectId && dateKey) {
-                openCommentsList(new Event('click'), projectId, dateKey);
+                renderCommentsListContent(projectId, dateKey);
             }
         }
 
@@ -1281,6 +1545,8 @@ function setDailyViewMode(mode) {
 
         function closeCommentsListModal() {
             document.getElementById('commentsListModal').classList.remove('active');
+            activeReplyCommentId = null;
+            expandedCommentThreads.clear();
         }
 
         function openAddCommentFromList() {
@@ -2135,7 +2401,7 @@ function renderLastStatusWidget() {
 
     let html = `<div class="widget-box project-notes-widget">
         <div class="widget-header notes-widget-header">
-            <div class="widget-title">Notas del Proyecto</div>
+            <div class="widget-title">📄Notas del Proyecto</div>
             <button class="notes-add-btn" onclick="openProjectNoteEditor()" title="Nueva nota">+</button>
         </div>`;
 
@@ -2518,13 +2784,19 @@ function renderLastStatusWidget() {
 
             }
 
-            // --- Comentarios (FORMATO EXACTO DAILY) ---
-            // Filtrar comentarios
+            // --- Comentarios (FORMATO EXACTO DAILY, CON HILOS) ---
             const projectComments = dailyComments
-                .filter(c => c.projectId === currentProjectId)
-                .sort((a, b) => {
-                    // Usar createdAt que ya tiene fecha y hora completas
-                    return new Date(b.createdAt) - new Date(a.createdAt); // Más reciente primero
+                .filter(c => c.projectId === currentProjectId);
+            const projectTopLevelComments = projectComments
+                .filter(c => !c.parentId)
+                .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            const projectRepliesByParent = {};
+            projectComments
+                .filter(c => !!c.parentId)
+                .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+                .forEach(r => {
+                    if (!projectRepliesByParent[r.parentId]) projectRepliesByParent[r.parentId] = [];
+                    projectRepliesByParent[r.parentId].push(r);
                 });
 
             html += `<div class="ficha-section">
@@ -2533,11 +2805,16 @@ function renderLastStatusWidget() {
             <button style="float:right; font-size:11px; padding:3px 8px; border-radius:999px; border:none; cursor:pointer; background:#f3ecff; color:#2a1b4a;" onclick="goToDailyFromFicha()">📅 Ver en Daily</button>
         </div>`;
 
-            if (projectComments.length === 0) {
+            if (projectTopLevelComments.length === 0) {
                 html += `<div class="empty-state">Sin comentarios aún. Añade tu primer comentario desde la vista Daily.</div>`;
             } else {
                 html += `<div class="comments-box">`;
-                projectComments.forEach(comment => {
+                projectTopLevelComments.forEach(comment => {
+                    const replies = projectRepliesByParent[comment.id] || [];
+                    const hasReplies = replies.length > 0;
+                    const isExpanded = expandedCommentThreads.has(comment.id);
+                    const isReplying = activeReplyCommentId === comment.id;
+
                     // Formatear fecha
                     const dateObj = new Date(comment.date + 'T00:00:00');
                     const dd = String(dateObj.getDate()).padStart(2, '0');
@@ -2589,6 +2866,26 @@ function renderLastStatusWidget() {
                 <div class="comment-text" style="margin-top:6px; padding-left: 58px; font-size: 12px; overflow-wrap:anywhere; word-break:break-word;">
                     ${escapeHtml(comment.text).replace(/\n/g, '<br>')}
                 </div>
+                <div class="comment-actions" style="position: static; justify-content: flex-start; margin-top: 6px; margin-left: 58px;">
+                    ${hasReplies ? `<button class="comment-action-btn comment-thread-btn" onclick="toggleCommentThreadFromFicha('${comment.id}')">💬 ${replies.length} ${replies.length === 1 ? 'respuesta' : 'respuestas'} ${isExpanded ? '▲' : '▼'}</button>` : ''}
+                    <button class="comment-action-btn comment-reply-btn" onclick="toggleReplyFormFromFicha('${comment.id}')">↩ Responder</button>
+                </div>
+                ${isReplying ? `<div class="reply-form" style="margin-left:58px; margin-top:6px;">
+                    <textarea class="reply-textarea" id="replyTextFicha_${comment.id}" placeholder="Escribe tu respuesta..." rows="2"></textarea>
+                    <div class="reply-form-actions">
+                        <button class="comment-action-btn btn-reply-send" onclick="saveCommentReplyFromFicha('${comment.id}', '${comment.projectId}', '${comment.date}')">Enviar</button>
+                        <button class="comment-action-btn" onclick="cancelReplyFormFromFicha()">Cancelar</button>
+                    </div>
+                </div>` : ''}
+                ${isExpanded && hasReplies ? `<div class="comment-replies" style="margin-left:58px; margin-top:6px;">${replies.map(r => {
+                        const rdateObj = new Date(r.date + 'T00:00:00');
+                        const rdd = String(rdateObj.getDate()).padStart(2, '0');
+                        const rmm = String(rdateObj.getMonth() + 1).padStart(2, '0');
+                        const ryy = String(rdateObj.getFullYear()).slice(-2);
+                        const rDate = `${rdd}/${rmm}/${ryy}`;
+                        const rTime = r.time || '';
+                        return `<div class="reply-entry"><div class="reply-thread-line"></div><div class="reply-body"><div class="reply-header">${rDate} ${rTime} · <strong>${escapeHtml(r.userName || 'ND')}</strong></div><div class="reply-text">${escapeHtml(r.text).replace(/\n/g, '<br>')}</div></div></div>`;
+                    }).join('')}</div>` : ''}
             </div>`;
                 });
                 html += `</div>`;
@@ -2811,7 +3108,9 @@ function renderDashboard() {
         totalVolume += volume;
         totalFte += fte;
         html += `
-        <tr class="dashboard-row" onclick="selectProject('${p.id}')">
+        <tr class="dashboard-row" onclick="hideStatusTooltip(); selectProject('${p.id}'); switchView('ficha')"
+            onmouseenter="showStatusTooltip(event, '${p.id}')"
+            onmouseleave="hideStatusTooltip()">
             <td class="dash-name">${escapeHtml(p.name || 'Sin nombre')}</td>
             <td>${start || '-'}</td>
             <td>${end || '-'}</td>
@@ -2936,6 +3235,56 @@ function clearDashboardFilters() {
         fechaFinHasta: ''
     };
     renderDashboard();
+}
+
+function showStatusTooltip(event, projectId) {
+    const statuses = (projectStatuses || [])
+        .filter(s => s.projectId === projectId)
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    let tooltip = document.getElementById('dashStatusTooltip');
+    if (!tooltip) {
+        tooltip = document.createElement('div');
+        tooltip.id = 'dashStatusTooltip';
+        tooltip.className = 'dash-status-tooltip';
+        document.body.appendChild(tooltip);
+    }
+
+    if (!statuses.length) {
+        tooltip.style.display = 'none';
+        return;
+    }
+
+    const last = statuses[0];
+    const d = new Date(last.createdAt);
+    const dateStr = d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit' });
+
+    tooltip.innerHTML = `
+        <div class="dst-header">
+            <span class="dst-date">${dateStr}</span>
+            <span class="dst-user">${escapeHtml(last.userInitials || '')}</span>
+        </div>
+        <div class="dst-text">${escapeHtml(last.statusText || '')}</div>`;
+
+    tooltip.style.display = 'block';
+    positionStatusTooltip(event, tooltip);
+}
+
+function positionStatusTooltip(event, tooltip) {
+    const pad = 14;
+    const tw = tooltip.offsetWidth || 280;
+    const th = tooltip.offsetHeight || 80;
+    let x = event.clientX + pad;
+    let y = event.clientY + pad;
+    if (x + tw > window.innerWidth - 8) x = event.clientX - tw - pad;
+    if (y + th > window.innerHeight - 8) y = event.clientY - th - pad;
+    tooltip.style.left = x + 'px';
+    tooltip.style.top  = y + 'px';
+}
+
+function hideStatusTooltip() {
+    const tooltip = document.getElementById('dashStatusTooltip');
+    if (tooltip) tooltip.style.display = 'none';
 }
 
 function toggleDashboardSort(column) {
@@ -3308,6 +3657,7 @@ function sortDailyProjects(projects) {
                 text: c.text || '',
                 completed: !!c.completed,
                 userName: c.user_name || 'US',
+                parentId: c.parent_id || null,
                 createdAt: c.created_at
             }));
 
