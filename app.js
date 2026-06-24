@@ -1317,12 +1317,16 @@ function setDailyViewMode(mode) {
                 if (isExpanded && hasReplies) {
                     html += `<div class="comment-replies">`;
                     replies.forEach(r => {
-                        const rdateObj = new Date(r.date + 'T00:00:00');
-                        const rdd = String(rdateObj.getDate()).padStart(2, '0');
-                        const rmm = String(rdateObj.getMonth() + 1).padStart(2, '0');
-                        const ryy = String(rdateObj.getFullYear()).slice(-2);
+                        const replyDateObj = r.createdAt
+                            ? new Date(r.createdAt)
+                            : new Date(`${r.date || dateKey}T${(r.time || '00:00')}:00`);
+                        const rdd = String(replyDateObj.getDate()).padStart(2, '0');
+                        const rmm = String(replyDateObj.getMonth() + 1).padStart(2, '0');
+                        const ryy = String(replyDateObj.getFullYear()).slice(-2);
+                        const rhh = String(replyDateObj.getHours()).padStart(2, '0');
+                        const rmin = String(replyDateObj.getMinutes()).padStart(2, '0');
                         const rDate = `${rdd}/${rmm}/${ryy}`;
-                        const rTime = r.time || '';
+                        const rTime = `${rhh}:${rmin}`;
                         html += `<div class="reply-entry">
                         <div class="reply-thread-line"></div>
                         <div class="reply-body">
@@ -2878,12 +2882,16 @@ function renderLastStatusWidget() {
                     </div>
                 </div>` : ''}
                 ${isExpanded && hasReplies ? `<div class="comment-replies" style="margin-left:58px; margin-top:6px;">${replies.map(r => {
-                        const rdateObj = new Date(r.date + 'T00:00:00');
-                        const rdd = String(rdateObj.getDate()).padStart(2, '0');
-                        const rmm = String(rdateObj.getMonth() + 1).padStart(2, '0');
-                        const ryy = String(rdateObj.getFullYear()).slice(-2);
+                        const replyDateObj = r.createdAt
+                            ? new Date(r.createdAt)
+                            : new Date(`${r.date || comment.date}T${(r.time || '00:00')}:00`);
+                        const rdd = String(replyDateObj.getDate()).padStart(2, '0');
+                        const rmm = String(replyDateObj.getMonth() + 1).padStart(2, '0');
+                        const ryy = String(replyDateObj.getFullYear()).slice(-2);
+                        const rhh = String(replyDateObj.getHours()).padStart(2, '0');
+                        const rmin = String(replyDateObj.getMinutes()).padStart(2, '0');
                         const rDate = `${rdd}/${rmm}/${ryy}`;
-                        const rTime = r.time || '';
+                        const rTime = `${rhh}:${rmin}`;
                         return `<div class="reply-entry"><div class="reply-thread-line"></div><div class="reply-body"><div class="reply-header">${rDate} ${rTime} · <strong>${escapeHtml(r.userName || 'ND')}</strong></div><div class="reply-text">${escapeHtml(r.text).replace(/\n/g, '<br>')}</div></div></div>`;
                     }).join('')}</div>` : ''}
             </div>`;
