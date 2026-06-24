@@ -455,14 +455,17 @@
 
 
         .user-icon {
-            font-size: 24px;
-            width: 36px;
-            height: 36px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.4px;
+            width: 34px;
+            height: 34px;
             display: flex;
             align-items: center;
             justify-content: center;
             background: rgba(255, 255, 255, 0.12);
             border-radius: 50%;
+            flex-shrink: 0;
         }
 
         .user-info {
@@ -1264,6 +1267,16 @@
         }
         .btn-reply-send:hover {
             background: #5a1080 !important;
+        }
+        .btn-reply-send-mail {
+            background: #136f63 !important;
+            color: #fff !important;
+            border-radius: 4px;
+            padding: 2px 10px !important;
+            font-weight: 600;
+        }
+        .btn-reply-send-mail:hover {
+            background: #0d5b51 !important;
         }
         .comment-replies {
             margin: 4px 0 0 28px;

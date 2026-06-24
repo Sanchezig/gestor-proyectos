@@ -48,145 +48,333 @@ function handlePrereqClick(event, projectId, prereqName) {
         delete item.url;
     }
 
-    // Guarda en Supabase y refresca la ficha
     updateProjectField(projectId, 'prerequisites', prereqs).then(() => {
         currentProjectId = projectId;
         renderFicha();
     });
 }
 
-        // ========== CONFIGURACIÓN PRODUCCIÓN ==========
-        
-        // =====================================================
-        // =========== CONFIGURACIÓN Y VARIABLES GLOBALES ======
-        // =====================================================
+// ========== CONFIGURACIÓN PRODUCCIÓN ==========
 
+// =====================================================
+// =========== CONFIGURACIÓN Y VARIABLES GLOBALES ======
+// =====================================================
 
-        // const SUPABASE_URL = "https://snyvvbwkkqpecfcvvdid.supabase.co";
-        // const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNueXZ2Yndra3FwZWNmY3Z2ZGlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjc3MDYsImV4cCI6MjA4NDYwMzcwNn0.szk1Do5oUAEg6zsqBGAIWC43zULtB1rDtmF8O9i2i9s";
-        // const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        // const STANDARD_PREREQUISITES = [
-        //     "Business Case",
-        //     "Stakeholders",
-        //     "Cálculo de Ahorros",
-        //     "Aprobaciones",
-        //     "Project Plan",
-        //     "Comunicaciones",
-        //     "Traspaso a BAU"
-        // ];
+let projectStatuses = [];
+let projectNotes = [];
+let projectNoteEditorState = {
+    isOpen: false,
+    editNoteId: null
+};
+let weeklyTasks = [];
+let incidents = [];
+let currentUser = null;
+const APP_LOGIN_PASSWORD = 'admin123';
+const APP_LOGIN_STORAGE_KEY = 'wtw_login_session_v1';
+const APP_CURRENT_USER_STORAGE_KEY = 'wtw_current_user';
+const APP_USERS_STORAGE_KEY = 'wtw_user_directory_v1';
+const APP_USERS_TABLE = 'app_users';
+const APP_LOGIN_EXPIRY_DAYS = 30;
+const DEFAULT_USERS = [
+    { initials: 'AP', email: 'alvaro.perez@wtwco.com' },
+    { initials: 'AR', email: 'ana.real@wtwco.com' },
+    { initials: 'HR', email: 'huri.rodriguez@wtwco.com' },
+    { initials: 'IS', email: 'ignacio.sanchez@wtwco.com' },
+    { initials: 'MR', email: 'mileni.rodriguez@wtwco.com' },
+    { initials: 'PU', email: 'polina.utkina@wtwco.com' }
+];
+let userDirectory = {};
+let userDirectorySource = 'local';
+let userDirectoryLoaded = false;
+let defaultPasswordHashCache = null;
+let appInitialized = false;
 
-        let projectStatuses = [];
-        let projectNotes = [];
-        let projectNoteEditorState = {
-            isOpen: false,
-            editNoteId: null
+function normalizeInitials(value) {
+    return (value || '').trim().toUpperCase();
+}
+
+function normalizeEmail(value) {
+    return (value || '').trim().toLowerCase();
+}
+
+async function hashTextSha256(value) {
+    const text = String(value || '');
+    if (!window.crypto || !window.crypto.subtle) {
+        // Fallback for non-secure contexts where SubtleCrypto is unavailable.
+        let hash = 0;
+        for (let i = 0; i < text.length; i++) {
+            hash = ((hash << 5) - hash) + text.charCodeAt(i);
+            hash |= 0;
+        }
+        return `fallback_${(hash >>> 0).toString(16).padStart(8, '0')}`;
+    }
+    const bytes = new TextEncoder().encode(text);
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function getDefaultPasswordHash() {
+    if (!defaultPasswordHashCache) {
+        defaultPasswordHashCache = await hashTextSha256(APP_LOGIN_PASSWORD);
+    }
+    return defaultPasswordHashCache;
+}
+
+function getDefaultEmailByInitials(initials) {
+    const normalized = normalizeInitials(initials);
+    const found = DEFAULT_USERS.find(u => u.initials === normalized);
+    return found ? found.email : '';
+}
+
+async function buildDefaultUserDirectory() {
+    const hash = await getDefaultPasswordHash();
+    const directory = {};
+    DEFAULT_USERS.forEach(user => {
+        directory[user.initials] = {
+            initials: user.initials,
+            email: user.email,
+            passwordHash: hash
         };
-        let weeklyTasks = [];
-        let incidents = [];
-        let currentUser = null; // valor inicial por defecto
-        const APP_LOGIN_PASSWORD = 'admin123';
-        const APP_LOGIN_STORAGE_KEY = 'wtw_login_session_v1';
-        const APP_LOGIN_EXPIRY_DAYS = 30;
-        let appInitialized = false;
+    });
+    return directory;
+}
 
+function normalizeUserDirectory(rawDirectory) {
+    const normalized = {};
+    const source = rawDirectory && typeof rawDirectory === 'object' ? rawDirectory : {};
 
-        // =====================================================
-        // =============== FUNCIONES COMPARTIDAS ===============
-        // (utilidades, helpers, actualización de campos, etc.)
-        // =====================================================
-
-        // Estado global para collapse/expand del sidebar
-        let sidebarCollapsed = {
-            activos: false,
-            completados: false
+    Object.keys(source).forEach(key => {
+        const row = source[key] || {};
+        const initials = normalizeInitials(row.initials || key);
+        if (!initials) return;
+        normalized[initials] = {
+            initials,
+            email: normalizeEmail(row.email || getDefaultEmailByInitials(initials)),
+            passwordHash: String(row.passwordHash || row.password_hash || '')
         };
+    });
 
-        // Función para escapar HTML y prevenir XSS
-        function escapeHtml(text) {
-            if (!text) return '';
-            const map = {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#39;'
-            };
-            return String(text).replace(/[&<>"']/g, char => map[char]);
-        }
+    return normalized;
+}
 
-        function formatSupabaseError(error, fallbackMessage) {
-            if (!error) return fallbackMessage || 'Error desconocido';
-
-            const parts = [error.message, error.details, error.hint]
-                .filter(Boolean)
-                .map(p => String(p).trim())
-                .filter(Boolean);
-
-            if (parts.length > 0) return parts.join(' | ');
-            return fallbackMessage || 'Error desconocido';
-        }
-
-        function getStatusIcon(status) {
-            switch (status) {
-                case 'Verde': return '✅';
-                case 'Ámbar': return '⚠️';
-                case 'Rojo': return '🚫';
-                default: return '✅';
-            }
-        }
-        
-        function getStatusText(status) {
-    switch (status) {
-        case "Verde":
-            return "On Time";
-        case "Ámbar":
-            return "Riesgo";
-        case "Rojo":
-            return "Bloqueo";
-        default:
-            return status || "-";
+function saveUserDirectoryToLocalStorage() {
+    try {
+        localStorage.setItem(APP_USERS_STORAGE_KEY, JSON.stringify(userDirectory));
+    } catch {
+        // Ignorar fallos de storage local.
     }
 }
 
+function loadUserDirectoryFromLocalStorage() {
+    try {
+        const raw = localStorage.getItem(APP_USERS_STORAGE_KEY);
+        if (!raw) return null;
+        return normalizeUserDirectory(JSON.parse(raw));
+    } catch {
+        return null;
+    }
+}
 
-        function toggleIndicatorDropdown(event, type) {
-            event.stopPropagation();
+function refreshTeamMembersFromDirectory() {
+    const members = Object.keys(userDirectory).sort();
+    if (members.length === 0) return;
+    teamMembers.splice(0, teamMembers.length, ...members);
+}
 
-            // Cerrar todos los dropdowns
-            document.querySelectorAll('.indicator-dropdown').forEach(d => d.classList.remove('active'));
+async function loadUserDirectory() {
+    if (userDirectoryLoaded) return;
 
-            // Abrir el dropdown específico
-            const dropdown = document.getElementById(`dropdown-${type}`);
-            if (dropdown) {
-                dropdown.classList.add('active');
+    const localDirectory = loadUserDirectoryFromLocalStorage();
+    if (localDirectory && Object.keys(localDirectory).length > 0) {
+        userDirectory = localDirectory;
+        userDirectorySource = 'local';
+    }
+
+    const { data, error } = await supabaseClient
+        .from(APP_USERS_TABLE)
+        .select('initials,email,password_hash')
+        .order('initials', { ascending: true });
+
+    if (!error) {
+        if ((data || []).length > 0) {
+            const supabaseDirectory = {};
+            data.forEach(row => {
+                const initials = normalizeInitials(row.initials);
+                if (!initials) return;
+                supabaseDirectory[initials] = {
+                    initials,
+                    email: normalizeEmail(row.email || getDefaultEmailByInitials(initials)),
+                    passwordHash: String(row.password_hash || '')
+                };
+            });
+            userDirectory = normalizeUserDirectory(supabaseDirectory);
+            userDirectorySource = 'supabase';
+            saveUserDirectoryToLocalStorage();
+        } else {
+            const defaults = await buildDefaultUserDirectory();
+            const rows = Object.values(defaults).map(u => ({
+                initials: u.initials,
+                email: u.email,
+                password_hash: u.passwordHash
+            }));
+
+            const { error: upsertError } = await supabaseClient
+                .from(APP_USERS_TABLE)
+                .upsert(rows, { onConflict: 'initials' });
+
+            if (!upsertError) {
+                userDirectory = defaults;
+                userDirectorySource = 'supabase';
+                saveUserDirectoryToLocalStorage();
             }
+        }
+    }
 
-            // Cerrar al hacer clic fuera
-            setTimeout(() => {
-                document.addEventListener('click', closeAllDropdowns, { once: true });
-            }, 10);
+    if (Object.keys(userDirectory).length === 0) {
+        userDirectory = await buildDefaultUserDirectory();
+        userDirectorySource = 'local';
+        saveUserDirectoryToLocalStorage();
+    }
+
+    refreshTeamMembersFromDirectory();
+    userDirectoryLoaded = true;
+}
+
+function getCurrentUserProfile() {
+    const initials = normalizeInitials(currentUser);
+    return userDirectory[initials] || null;
+}
+
+function getUserEmailByInitials(initials) {
+    const normalized = normalizeInitials(initials);
+    const profile = userDirectory[normalized];
+    return profile ? profile.email : '';
+}
+
+async function saveUserProfile(oldInitials, profile) {
+    const oldKey = normalizeInitials(oldInitials);
+    const newKey = normalizeInitials(profile && profile.initials);
+    if (!newKey) throw new Error('Iniciales inválidas');
+
+    if (oldKey && oldKey !== newKey) {
+        delete userDirectory[oldKey];
+    }
+
+    userDirectory[newKey] = {
+        initials: newKey,
+        email: normalizeEmail(profile.email),
+        passwordHash: String(profile.passwordHash || '')
+    };
+
+    saveUserDirectoryToLocalStorage();
+    refreshTeamMembersFromDirectory();
+
+    if (userDirectorySource === 'supabase') {
+        const { error: upsertError } = await supabaseClient
+            .from(APP_USERS_TABLE)
+            .upsert({
+                initials: newKey,
+                email: normalizeEmail(profile.email),
+                password_hash: String(profile.passwordHash || '')
+            }, { onConflict: 'initials' });
+
+        if (upsertError) {
+            throw new Error(formatSupabaseError(upsertError, 'No se pudo guardar el usuario en Supabase'));
         }
 
-        function closeAllDropdowns() {
-            document.querySelectorAll('.indicator-dropdown').forEach(d => d.classList.remove('active'));
+        if (oldKey && oldKey !== newKey) {
+            await supabaseClient
+                .from(APP_USERS_TABLE)
+                .delete()
+                .eq('initials', oldKey);
         }
+    }
+}
 
-        async function updateIndicator(event, projectId, field, value) {
-            event.stopPropagation();
-            closeAllDropdowns();
+// =====================================================
+// =============== FUNCIONES COMPARTIDAS ===============
+// (utilidades, helpers, actualización de campos, etc.)
+// =====================================================
 
-            // Actualizar en memoria
-            const project = projects.find(p => p.id === projectId);
-            if (project) {
-                project[field] = value;
-            }
+let sidebarCollapsed = {
+    activos: false,
+    completados: false
+};
 
-            // Guardar en base de datos
-            await updateProjectField(projectId, field, value);
+function escapeHtml(text) {
+    if (!text) return '';
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    };
+    return String(text).replace(/[&<>"']/g, char => map[char]);
+}
 
-            // Refrescar vistas
-            renderFicha();
-        }
+function formatSupabaseError(error, fallbackMessage) {
+    if (!error) return fallbackMessage || 'Error desconocido';
+
+    const parts = [error.message, error.details, error.hint]
+        .filter(Boolean)
+        .map(p => String(p).trim())
+        .filter(Boolean);
+
+    if (parts.length > 0) return parts.join(' | ');
+    return fallbackMessage || 'Error desconocido';
+}
+
+function getStatusIcon(status) {
+    switch (status) {
+        case 'Verde': return '✅';
+        case 'Ámbar': return '⚠️';
+        case 'Rojo': return '🚫';
+        default: return '✅';
+    }
+}
+
+function getStatusText(status) {
+    switch (status) {
+        case 'Verde':
+            return 'On Time';
+        case 'Ámbar':
+            return 'Riesgo';
+        case 'Rojo':
+            return 'Bloqueo';
+        default:
+            return status || '-';
+    }
+}
+
+function toggleIndicatorDropdown(event, type) {
+    event.stopPropagation();
+    document.querySelectorAll('.indicator-dropdown').forEach(d => d.classList.remove('active'));
+    const dropdown = document.getElementById(`dropdown-${type}`);
+    if (dropdown) {
+        dropdown.classList.add('active');
+    }
+    setTimeout(() => {
+        document.addEventListener('click', closeAllDropdowns, { once: true });
+    }, 10);
+}
+
+function closeAllDropdowns() {
+    document.querySelectorAll('.indicator-dropdown').forEach(d => d.classList.remove('active'));
+}
+
+async function updateIndicator(event, projectId, field, value) {
+    event.stopPropagation();
+    closeAllDropdowns();
+
+    const project = projects.find(p => p.id === projectId);
+    if (project) {
+        project[field] = value;
+    }
+
+    await updateProjectField(projectId, field, value);
+    renderFicha();
+}
 
 
         const madridHolidays = [
@@ -1361,6 +1549,7 @@ function setDailyViewMode(mode) {
                     <textarea class="reply-textarea" id="replyText_${c.id}" placeholder="Escribe tu respuesta..." rows="2"></textarea>
                     <div class="reply-form-actions">
                         <button class="comment-action-btn btn-reply-send" onclick="saveCommentReply('${c.id}', '${projectId}', '${dateKey}')">Enviar</button>
+                        <button class="comment-action-btn btn-reply-send-mail" onclick="saveCommentReply('${c.id}', '${projectId}', '${dateKey}', true)">Enviar y mail</button>
                         <button class="comment-action-btn" onclick="cancelReplyForm()">Cancelar</button>
                     </div>
                 </div>`;
@@ -1428,11 +1617,50 @@ function setDailyViewMode(mode) {
             renderCommentsListContent(projectId, dateKey);
         }
 
-        async function saveCommentReply(parentId, projectId, dateKey) {
+        function openCorporateEmailDraft(to, subject, body) {
+            const recipient = (to || '').trim();
+            if (!recipient) return false;
+            const mailto = `mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent(subject || '')}&body=${encodeURIComponent(body || '')}`;
+            window.location.href = mailto;
+            return true;
+        }
+
+        function notifyCommentAuthorByEmail(parentComment, replyText, projectId, dateKey) {
+            if (!parentComment) {
+                alert('No se pudo identificar el comentario original para enviar el email.');
+                return;
+            }
+
+            const authorInitials = normalizeInitials(parentComment.userName || parentComment.responsible || '');
+            const recipientEmail = getUserEmailByInitials(authorInitials);
+
+            if (!recipientEmail) {
+                alert(`No hay email configurado para ${authorInitials || 'el autor original'}.`);
+                return;
+            }
+
+            const parentText = (parentComment.text || '').trim();
+            const subject = '[Gestor Proyectos] Nueva respuesta a comentario';
+            const body = [
+                'Comentario original:',
+                parentText || '(sin texto)',
+                '',
+                'Respuesta:',
+                replyText
+            ].join('\n');
+
+            const opened = openCorporateEmailDraft(recipientEmail, subject, body);
+            if (!opened) {
+                alert('No se pudo abrir el cliente de correo.');
+            }
+        }
+
+        async function saveCommentReply(parentId, projectId, dateKey, notifyByEmail = false) {
             const ta = document.getElementById('replyText_' + parentId);
             if (!ta) return;
             const text = ta.value.trim();
             if (!text) { ta.focus(); return; }
+            const parentComment = dailyComments.find(c => c.id === parentId) || null;
 
             const now = new Date();
             const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
@@ -1457,6 +1685,10 @@ function setDailyViewMode(mode) {
                 console.error(error);
                 alert('Error guardando respuesta');
                 return;
+            }
+
+            if (notifyByEmail) {
+                notifyCommentAuthorByEmail(parentComment, text, projectId, dateKey);
             }
 
             activeReplyCommentId = null;
@@ -1495,7 +1727,7 @@ function setDailyViewMode(mode) {
             renderFicha();
         }
 
-        async function saveCommentReplyFromFicha(parentId, projectId, dateKey) {
+        async function saveCommentReplyFromFicha(parentId, projectId, dateKey, notifyByEmail = false) {
             const ta = document.getElementById('replyTextFicha_' + parentId);
             if (!ta) return;
             const text = ta.value.trim();
@@ -1503,6 +1735,7 @@ function setDailyViewMode(mode) {
                 ta.focus();
                 return;
             }
+            const parentComment = dailyComments.find(c => c.id === parentId) || null;
 
             const now = new Date();
             const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
@@ -1527,6 +1760,10 @@ function setDailyViewMode(mode) {
                 console.error(error);
                 alert('Error guardando respuesta');
                 return;
+            }
+
+            if (notifyByEmail) {
+                notifyCommentAuthorByEmail(parentComment, text, projectId, dateKey);
             }
 
             activeReplyCommentId = null;
@@ -2923,6 +3160,7 @@ function renderLastStatusWidget() {
                     <textarea class="reply-textarea" id="replyTextFicha_${comment.id}" placeholder="Escribe tu respuesta..." rows="2"></textarea>
                     <div class="reply-form-actions">
                         <button class="comment-action-btn btn-reply-send" onclick="saveCommentReplyFromFicha('${comment.id}', '${comment.projectId}', '${comment.date}')">Enviar</button>
+                        <button class="comment-action-btn btn-reply-send-mail" onclick="saveCommentReplyFromFicha('${comment.id}', '${comment.projectId}', '${comment.date}', true)">Enviar y mail</button>
                         <button class="comment-action-btn" onclick="cancelReplyFormFromFicha()">Cancelar</button>
                     </div>
                 </div>` : ''}
@@ -4299,50 +4537,158 @@ function sortDailyProjects(projects) {
 
 
         function changeUser() {
-            const newUser = prompt('Introduce tus iniciales (ej: IS, MR, HR...)', currentUser);
-            if (newUser && newUser.trim()) {
-                currentUser = newUser.trim().toUpperCase();
-                localStorage.setItem('wtw_current_user', currentUser);
-                updateUserDisplay();
-            }
+            openUserSettingsModal();
         }
 
         function updateUserDisplay() {
-            const userNameEl = document.querySelector('.user-name');
             const userIconEl = document.querySelector('.user-icon');
-            if (!userNameEl || !userIconEl) return;
+            const userNameEl = document.getElementById('currentUserDisplay');
+            if (!userIconEl) return;
 
-            // Texto fijo debajo: "Usuario"
-            userNameEl.textContent = 'Usuario';
+            const initials = normalizeInitials(currentUser || 'US');
+            userIconEl.textContent = initials.substring(0, 2);
+            if (userNameEl) {
+                userNameEl.textContent = '';
+            }
+        }
 
-            // Iniciales solo en el círculo
-            const initials = currentUser.substring(0, 2).toUpperCase();
-            userIconEl.textContent = initials;
+        function openUserSettingsModal() {
+            const modal = document.getElementById('userSettingsModal');
+            if (!modal) return;
+
+            const profile = getCurrentUserProfile() || {
+                initials: normalizeInitials(currentUser || ''),
+                email: ''
+            };
+
+            const initialsInput = document.getElementById('settingsInitials');
+            const emailInput = document.getElementById('settingsEmail');
+            const passwordInput = document.getElementById('settingsPassword');
+            const passwordConfirmInput = document.getElementById('settingsPasswordConfirm');
+            const errorEl = document.getElementById('settingsError');
+
+            if (initialsInput) initialsInput.value = profile.initials || '';
+            if (emailInput) emailInput.value = profile.email || '';
+            if (passwordInput) passwordInput.value = '';
+            if (passwordConfirmInput) passwordConfirmInput.value = '';
+            if (errorEl) errorEl.textContent = '';
+
+            modal.classList.add('active');
+            setTimeout(() => initialsInput && initialsInput.focus(), 0);
+        }
+
+        function closeUserSettingsModal() {
+            const modal = document.getElementById('userSettingsModal');
+            if (modal) modal.classList.remove('active');
+        }
+
+        async function saveUserSettings() {
+            const initialsInput = document.getElementById('settingsInitials');
+            const emailInput = document.getElementById('settingsEmail');
+            const passwordInput = document.getElementById('settingsPassword');
+            const passwordConfirmInput = document.getElementById('settingsPasswordConfirm');
+            const errorEl = document.getElementById('settingsError');
+            if (!initialsInput || !emailInput || !passwordInput || !passwordConfirmInput || !errorEl) return;
+
+            errorEl.textContent = '';
+
+            const newInitials = normalizeInitials(initialsInput.value);
+            const newEmail = normalizeEmail(emailInput.value);
+            const newPassword = passwordInput.value || '';
+            const newPasswordConfirm = passwordConfirmInput.value || '';
+
+            if (!newInitials) {
+                errorEl.textContent = 'Las iniciales son obligatorias.';
+                initialsInput.focus();
+                return;
+            }
+
+            if (!newEmail || !newEmail.includes('@')) {
+                errorEl.textContent = 'Introduce un email válido.';
+                emailInput.focus();
+                return;
+            }
+
+            const currentInitials = normalizeInitials(currentUser);
+            const existing = userDirectory[newInitials];
+            if (existing && newInitials !== currentInitials) {
+                errorEl.textContent = `Ya existe otro usuario con iniciales ${newInitials}.`;
+                initialsInput.focus();
+                return;
+            }
+
+            if (newPassword || newPasswordConfirm) {
+                if (newPassword.length < 6) {
+                    errorEl.textContent = 'La contraseña debe tener al menos 6 caracteres.';
+                    passwordInput.focus();
+                    return;
+                }
+                if (newPassword !== newPasswordConfirm) {
+                    errorEl.textContent = 'La confirmación de contraseña no coincide.';
+                    passwordConfirmInput.focus();
+                    return;
+                }
+            }
+
+            const existingProfile = getCurrentUserProfile() || {};
+            const nextPasswordHash = newPassword
+                ? await hashTextSha256(newPassword)
+                : String(existingProfile.passwordHash || await getDefaultPasswordHash());
+
+            try {
+                await saveUserProfile(currentInitials, {
+                    initials: newInitials,
+                    email: newEmail,
+                    passwordHash: nextPasswordHash
+                });
+            } catch (error) {
+                errorEl.textContent = error && error.message ? error.message : 'Error guardando ajustes.';
+                return;
+            }
+
+            currentUser = newInitials;
+            localStorage.setItem(APP_CURRENT_USER_STORAGE_KEY, currentUser);
+            persistLoginSession(currentUser);
+
+            updateUserDisplay();
+            syncTeamMembersInSelectors();
+            renderDaily();
+            if (document.getElementById('fichaView')?.classList.contains('active')) {
+                renderFicha();
+            }
+            closeUserSettingsModal();
+        }
+
+        function clearLoginSession() {
+            try {
+                localStorage.removeItem(APP_LOGIN_STORAGE_KEY);
+            } catch {
+                // Ignorar fallos de storage local.
+            }
+        }
+
+        function logoutCurrentUser() {
+            clearLoginSession();
+            appInitialized = false;
+            window.location.reload();
         }
 
 
 
 
         async function init() {
-            // 1. CARGAR USUARIO DESDE LOCALSTORAGE
-            const savedUser = localStorage.getItem('wtw_current_user');
+            await loadUserDirectory();
 
-            if (savedUser) {
-                // Si existe usuario guardado, usarlo
+            const savedUser = normalizeInitials(localStorage.getItem(APP_CURRENT_USER_STORAGE_KEY));
+            if (savedUser && userDirectory[savedUser]) {
                 currentUser = savedUser;
+            } else if (currentUser && userDirectory[currentUser]) {
+                // Mantener el usuario fijado por la sesión válida.
             } else {
-                // Si es la primera vez, solicitar iniciales
-                const newUser = prompt('👋 Bienvenido/a al gestor WTW\\n\\nIntroduce tus iniciales (ej: IS, MR, HR...)');
-
-                if (newUser && newUser.trim()) {
-                    currentUser = newUser.trim().toUpperCase();
-                    localStorage.setItem('wtw_current_user', currentUser);
-                } else {
-                    // Si cancela, usar valor por defecto
-                    currentUser = 'US';
-                    localStorage.setItem('wtw_current_user', currentUser);
-                }
+                currentUser = Object.keys(userDirectory).sort()[0] || 'IS';
             }
+
+            localStorage.setItem(APP_CURRENT_USER_STORAGE_KEY, currentUser);
 
             // 2. ACTUALIZAR INTERFAZ CON EL USUARIO CARGADO
             updateUserDisplay();
@@ -4411,9 +4757,18 @@ function sortDailyProjects(projects) {
                 const parsed = JSON.parse(raw);
                 const expiresAt = Number(parsed && parsed.expiresAt);
                 if (!expiresAt || Date.now() > expiresAt) {
-                    localStorage.removeItem(APP_LOGIN_STORAGE_KEY);
+                    clearLoginSession();
                     return false;
                 }
+
+                const initials = normalizeInitials(parsed && parsed.initials);
+                if (!initials) {
+                    clearLoginSession();
+                    return false;
+                }
+
+                currentUser = initials;
+                localStorage.setItem(APP_CURRENT_USER_STORAGE_KEY, initials);
 
                 return true;
             } catch {
@@ -4421,12 +4776,14 @@ function sortDailyProjects(projects) {
             }
         }
 
-        function persistLoginSession() {
+        function persistLoginSession(initials) {
             try {
                 const ttlMs = APP_LOGIN_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+                const normalizedInitials = normalizeInitials(initials || currentUser);
                 const payload = {
                     createdAt: Date.now(),
-                    expiresAt: Date.now() + ttlMs
+                    expiresAt: Date.now() + ttlMs,
+                    initials: normalizedInitials
                 };
 
                 localStorage.setItem(APP_LOGIN_STORAGE_KEY, JSON.stringify(payload));
@@ -4436,26 +4793,58 @@ function sortDailyProjects(projects) {
         }
 
         async function handleLoginAttempt() {
+            const initialsInput = document.getElementById('loginInitials');
             const passwordInput = document.getElementById('loginPassword');
             const loginButton = document.getElementById('loginButton');
             const loginError = document.getElementById('loginError');
             if (!passwordInput || !loginButton || !loginError) return;
 
-            const enteredPassword = passwordInput.value || '';
-            if (enteredPassword !== APP_LOGIN_PASSWORD) {
-                loginError.textContent = 'Contraseña incorrecta.';
-                passwordInput.focus();
-                passwordInput.select();
+            if (!initialsInput) {
+                loginError.textContent = 'La pantalla de login está desactualizada. Recarga con Ctrl+F5.';
                 return;
             }
 
             loginError.textContent = '';
-            persistLoginSession();
             loginButton.disabled = true;
             loginButton.textContent = 'Entrando...';
 
             try {
+                await loadUserDirectory();
+
+                const enteredInitials = normalizeInitials(initialsInput.value);
+                if (!enteredInitials) {
+                    loginError.textContent = 'Introduce tus iniciales.';
+                    initialsInput.focus();
+                    return;
+                }
+
+                const profile = userDirectory[enteredInitials];
+                if (!profile) {
+                    loginError.textContent = 'Usuario no encontrado.';
+                    initialsInput.focus();
+                    initialsInput.select();
+                    return;
+                }
+
+                const enteredPassword = passwordInput.value || '';
+                const enteredHash = await hashTextSha256(enteredPassword);
+                const expectedHash = String(profile.passwordHash || await getDefaultPasswordHash());
+
+                if (enteredHash !== expectedHash) {
+                    loginError.textContent = 'Contraseña incorrecta.';
+                    passwordInput.focus();
+                    passwordInput.select();
+                    return;
+                }
+
+                currentUser = enteredInitials;
+                localStorage.setItem(APP_CURRENT_USER_STORAGE_KEY, currentUser);
+                persistLoginSession(currentUser);
                 await enterApplication();
+            } catch (error) {
+                console.error('Error en login:', error);
+                const message = error && error.message ? error.message : 'Error inesperado en el login.';
+                loginError.textContent = `No se pudo iniciar sesión: ${message}`;
             } finally {
                 loginButton.disabled = false;
                 loginButton.textContent = 'Entrar';
@@ -4477,6 +4866,7 @@ function sortDailyProjects(projects) {
             }
 
             const loginButton = document.getElementById('loginButton');
+            const initialsInput = document.getElementById('loginInitials');
             const passwordInput = document.getElementById('loginPassword');
 
             if (loginButton) {
@@ -4492,8 +4882,17 @@ function sortDailyProjects(projects) {
                         void handleLoginAttempt();
                     }
                 });
+            }
 
-                setTimeout(() => passwordInput.focus(), 0);
+            if (initialsInput) {
+                initialsInput.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        void handleLoginAttempt();
+                    }
+                });
+
+                setTimeout(() => initialsInput.focus(), 0);
             }
         }
 
