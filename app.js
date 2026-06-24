@@ -1245,7 +1245,22 @@ function setDailyViewMode(mode) {
         }
 
         function formatDateTimeEuropeMadrid(dateInput, fallbackDateKey = '', fallbackTime = '') {
-            const dateObj = dateInput ? new Date(dateInput) : null;
+            let normalizedInput = dateInput;
+            if (typeof dateInput === 'string') {
+                const trimmed = dateInput.trim();
+                const isoNoZonePattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?$/;
+                const spacedNoZonePattern = /^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?$/;
+                const hasZonePattern = /(Z|[+\-]\d{2}:\d{2})$/i;
+                if (!hasZonePattern.test(trimmed)) {
+                    if (isoNoZonePattern.test(trimmed)) {
+                        normalizedInput = `${trimmed}Z`;
+                    } else if (spacedNoZonePattern.test(trimmed)) {
+                        normalizedInput = `${trimmed.replace(' ', 'T')}Z`;
+                    }
+                }
+            }
+
+            const dateObj = normalizedInput ? new Date(normalizedInput) : null;
             if (dateObj && !Number.isNaN(dateObj.getTime())) {
                 const parts = new Intl.DateTimeFormat('es-ES', {
                     timeZone: 'Europe/Madrid',
