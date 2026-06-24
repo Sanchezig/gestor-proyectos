@@ -1244,6 +1244,43 @@ function setDailyViewMode(mode) {
             document.getElementById('commentsListModal').classList.add('active');
         }
 
+        function formatDateTimeEuropeMadrid(dateInput, fallbackDateKey = '', fallbackTime = '') {
+            const dateObj = dateInput ? new Date(dateInput) : null;
+            if (dateObj && !Number.isNaN(dateObj.getTime())) {
+                const parts = new Intl.DateTimeFormat('es-ES', {
+                    timeZone: 'Europe/Madrid',
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false
+                }).formatToParts(dateObj);
+
+                const partValues = {};
+                parts.forEach(p => {
+                    if (p.type !== 'literal') partValues[p.type] = p.value;
+                });
+
+                return {
+                    date: `${partValues.day}/${partValues.month}/${partValues.year}`,
+                    time: `${partValues.hour}:${partValues.minute}`
+                };
+            }
+
+            let fallbackDate = '';
+            if (/^\d{4}-\d{2}-\d{2}$/.test(fallbackDateKey)) {
+                const [yyFull, mm, dd] = fallbackDateKey.split('-');
+                fallbackDate = `${dd}/${mm}/${yyFull.slice(-2)}`;
+            }
+
+            const fallbackClock = (fallbackTime || '').slice(0, 5);
+            return {
+                date: fallbackDate,
+                time: fallbackClock
+            };
+        }
+
         function renderCommentsListContent(projectId, dateKey) {
             const allComments = dailyComments.filter(c => c.projectId === projectId && c.date === dateKey);
             const topLevel = allComments
@@ -1317,16 +1354,9 @@ function setDailyViewMode(mode) {
                 if (isExpanded && hasReplies) {
                     html += `<div class="comment-replies">`;
                     replies.forEach(r => {
-                        const replyDateObj = r.createdAt
-                            ? new Date(r.createdAt)
-                            : new Date(`${r.date || dateKey}T${(r.time || '00:00')}:00`);
-                        const rdd = String(replyDateObj.getDate()).padStart(2, '0');
-                        const rmm = String(replyDateObj.getMonth() + 1).padStart(2, '0');
-                        const ryy = String(replyDateObj.getFullYear()).slice(-2);
-                        const rhh = String(replyDateObj.getHours()).padStart(2, '0');
-                        const rmin = String(replyDateObj.getMinutes()).padStart(2, '0');
-                        const rDate = `${rdd}/${rmm}/${ryy}`;
-                        const rTime = `${rhh}:${rmin}`;
+                        const rDateTime = formatDateTimeEuropeMadrid(r.createdAt, r.date || dateKey, r.time || '');
+                        const rDate = rDateTime.date;
+                        const rTime = rDateTime.time;
                         html += `<div class="reply-entry">
                         <div class="reply-thread-line"></div>
                         <div class="reply-body">
@@ -2882,16 +2912,9 @@ function renderLastStatusWidget() {
                     </div>
                 </div>` : ''}
                 ${isExpanded && hasReplies ? `<div class="comment-replies" style="margin-left:58px; margin-top:6px;">${replies.map(r => {
-                        const replyDateObj = r.createdAt
-                            ? new Date(r.createdAt)
-                            : new Date(`${r.date || comment.date}T${(r.time || '00:00')}:00`);
-                        const rdd = String(replyDateObj.getDate()).padStart(2, '0');
-                        const rmm = String(replyDateObj.getMonth() + 1).padStart(2, '0');
-                        const ryy = String(replyDateObj.getFullYear()).slice(-2);
-                        const rhh = String(replyDateObj.getHours()).padStart(2, '0');
-                        const rmin = String(replyDateObj.getMinutes()).padStart(2, '0');
-                        const rDate = `${rdd}/${rmm}/${ryy}`;
-                        const rTime = `${rhh}:${rmin}`;
+                        const rDateTime = formatDateTimeEuropeMadrid(r.createdAt, r.date || comment.date, r.time || '');
+                        const rDate = rDateTime.date;
+                        const rTime = rDateTime.time;
                         return `<div class="reply-entry"><div class="reply-thread-line"></div><div class="reply-body"><div class="reply-header">${rDate} ${rTime} · <strong>${escapeHtml(r.userName || 'ND')}</strong></div><div class="reply-text">${escapeHtml(r.text).replace(/\n/g, '<br>')}</div></div></div>`;
                     }).join('')}</div>` : ''}
             </div>`;
