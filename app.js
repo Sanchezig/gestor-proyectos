@@ -1096,6 +1096,7 @@ function setDailyViewMode(mode) {
                             <option value="Idea" ${project.phase === 'Idea' ? 'selected' : ''}>Idea</option>
                             <option value="En Progreso" ${project.phase === 'En Progreso' ? 'selected' : ''}>En Progreso</option>
                             <option value="On Hold" ${project.phase === 'On Hold' ? 'selected' : ''}>On Hold</option>
+                            <option value="Mantenimiento" ${project.phase === 'Mantenimiento' ? 'selected' : ''}>Mantenimiento</option>
                             <option value="Cerrado" ${project.phase === 'Cerrado' ? 'selected' : ''}>Cerrado</option>
                         </select>
                     </td>
@@ -2969,6 +2970,7 @@ function renderLastStatusWidget() {
                     <option value="Idea" ${project.phase === 'Idea' ? 'selected' : ''}>Idea</option>
                     <option value="En Progreso" ${project.phase === 'En Progreso' ? 'selected' : ''}>En Progreso</option>
                     <option value="On Hold" ${project.phase === 'On Hold' ? 'selected' : ''}>On Hold</option>
+                    <option value="Mantenimiento" ${project.phase === 'Mantenimiento' ? 'selected' : ''}>Mantenimiento</option>
                     <option value="Cerrado" ${project.phase === 'Cerrado' ? 'selected' : ''}>Cerrado</option>
                 </select>
             </div>
