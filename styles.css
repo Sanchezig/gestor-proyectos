@@ -890,6 +890,16 @@
             border-left: 3px solid #ffb547;
         }
 
+        .daily-table td.daily-cell.has-comment-personal {
+            background: #e9f8ee;
+            border-left: 3px solid #7bcf8f;
+        }
+
+        .daily-table td.daily-cell.has-comment-mixed {
+            background: linear-gradient(135deg, #fff8e6 0%, #fff8e6 49%, #e9f8ee 51%, #e9f8ee 100%);
+            border-left: 3px solid #d0b46c;
+        }
+
         .holiday-cell {
             background: linear-gradient(135deg, #ffe8ee 0%, #fff0f3 100%);
             position: relative;

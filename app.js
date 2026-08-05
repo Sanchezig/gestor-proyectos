@@ -911,6 +911,56 @@ function setDailyViewMode(mode) {
             return `${year}-${month}-${day}`;
         }
 
+        function getCommentOwnerInitials(comment) {
+            return normalizeInitials((comment && (comment.ownerInitials || comment.userName)) || '');
+        }
+
+        function isPersonalComment(comment) {
+            return !!(comment && comment.isPersonal);
+        }
+
+        function canCurrentUserViewComment(comment) {
+            if (!comment) return false;
+            if (!isPersonalComment(comment)) return true;
+            const owner = getCommentOwnerInitials(comment);
+            return owner && owner === normalizeInitials(currentUser);
+        }
+
+        function canCurrentUserManageComment(comment) {
+            if (!comment) return false;
+            if (!isPersonalComment(comment)) return true;
+            const owner = getCommentOwnerInitials(comment);
+            return owner && owner === normalizeInitials(currentUser);
+        }
+
+        function getVisibleCommentsByProjectDate(projectId, dateKey) {
+            return dailyComments.filter(c =>
+                c.projectId === projectId &&
+                c.date === dateKey &&
+                canCurrentUserViewComment(c)
+            );
+        }
+
+        function getVisibleCommentsByProject(projectId) {
+            return dailyComments.filter(c => c.projectId === projectId && canCurrentUserViewComment(c));
+        }
+
+        function commentCountsForCell(topLevelComments) {
+            const owner = normalizeInitials(currentUser);
+            const pendingTeam = topLevelComments.filter(c =>
+                !c.completed &&
+                !c.isPersonal &&
+                (c.responsible === currentUser || !c.responsible)
+            ).length;
+            const pendingPersonal = topLevelComments.filter(c =>
+                !c.completed &&
+                c.isPersonal &&
+                getCommentOwnerInitials(c) === owner
+            ).length;
+
+            return { pendingTeam, pendingPersonal };
+        }
+
         function renderDaily() {
             // 1. Si no hay proyectos en absoluto (base de datos vacía), mostrar mensaje inicial
             if (!projects.length) {
@@ -1108,21 +1158,25 @@ function setDailyViewMode(mode) {
                         const monthNum = String(date.getMonth() + 1).padStart(2, '0');
                         const dateKey = `${date.getFullYear()}-${monthNum}-${dayNum}`;
 
-                        const cellComments = dailyComments.filter(c =>
-                            c.projectId === project.id && c.date === dateKey
-                        );
+                        const cellComments = getVisibleCommentsByProjectDate(project.id, dateKey);
                         const topLevelComments = cellComments.filter(c => !c.parentId);
                         const replyComments = cellComments.filter(c => !!c.parentId);
                         const threadsWithReplies = new Set(replyComments.map(r => r.parentId)).size;
 
-                        // Mostrar resaltado solo si hay comentarios pendientes asignados al usuario actual o sin responsable
-                        const userPendingComments = topLevelComments.filter(c => 
-                            !c.completed && (c.responsible === currentUser || !c.responsible)
-                        );
-                        const hasCells = userPendingComments.length > 0;
+                        const { pendingTeam, pendingPersonal } = commentCountsForCell(topLevelComments);
+                        const hasTeamPending = pendingTeam > 0;
+                        const hasPersonalPending = pendingPersonal > 0;
                         const isHoliday = madridHolidays.includes(dateKey);
                         const isToday = dateKey === new Date().toISOString().slice(0, 10);
-                        const baseClass = hasCells ? 'daily-cell has-comment' : 'daily-cell';
+                        let highlightClass = '';
+                        if (hasTeamPending && hasPersonalPending) {
+                            highlightClass = ' has-comment-mixed';
+                        } else if (hasTeamPending) {
+                            highlightClass = ' has-comment';
+                        } else if (hasPersonalPending) {
+                            highlightClass = ' has-comment-personal';
+                        }
+                        const baseClass = `daily-cell${highlightClass}`;
                         const holidayClass = isHoliday ? ' holiday-cell' : '';
                         const todayClass = isToday ? ' today-cell' : '';
                         const cellClass = baseClass + holidayClass + todayClass;
@@ -1306,14 +1360,38 @@ function setDailyViewMode(mode) {
                     document.getElementById('commentResponsible').value = comment.responsible || '';
                     document.getElementById('commentUrgency').value = comment.urgency;
                     document.getElementById('commentIncident').checked = comment.hasIncident;
+                    document.getElementById('commentPersonal').checked = !!comment.isPersonal;
                     document.getElementById('commentText').value = comment.text;
                 }
             } else {
                 document.getElementById('commentResponsible').value = '';
                 document.getElementById('commentUrgency').value = 'Normal';
                 document.getElementById('commentIncident').checked = false;
+                document.getElementById('commentPersonal').checked = false;
                 document.getElementById('commentText').value = '';
             }
+
+            applyPersonalTaskRuleFromUI();
+        }
+
+        function applyPersonalTaskRuleFromUI() {
+            const personalCheckbox = document.getElementById('commentPersonal');
+            const responsibleSelect = document.getElementById('commentResponsible');
+            if (!personalCheckbox || !responsibleSelect) return;
+
+            if (personalCheckbox.checked) {
+                const owner = normalizeInitials(currentUser || '');
+                responsibleSelect.value = owner;
+                responsibleSelect.setAttribute('disabled', 'disabled');
+                responsibleSelect.title = 'En tareas personales, el responsable es el creador';
+            } else {
+                responsibleSelect.removeAttribute('disabled');
+                responsibleSelect.title = '';
+            }
+        }
+
+        function onPersonalTaskToggle() {
+            applyPersonalTaskRuleFromUI();
         }
 
         function closeDailyModal() {
@@ -1322,6 +1400,9 @@ function setDailyViewMode(mode) {
             document.getElementById('commentResponsible').value = '';
             document.getElementById('commentUrgency').value = 'Normal';
             document.getElementById('commentIncident').checked = false;
+            document.getElementById('commentPersonal').checked = false;
+            document.getElementById('commentResponsible').removeAttribute('disabled');
+            document.getElementById('commentResponsible').title = '';
             editingCommentId = null;
         }
 
@@ -1330,7 +1411,10 @@ function setDailyViewMode(mode) {
 
         async function saveDailyComment() {
             const projectId = document.getElementById('commentProjectSelect').value;
-            const responsible = document.getElementById('commentResponsible').value.trim();
+            const isPersonal = !!document.getElementById('commentPersonal').checked;
+            const manualResponsible = document.getElementById('commentResponsible').value.trim();
+            const ownerInitials = normalizeInitials(currentUser || 'US');
+            const responsible = isPersonal ? ownerInitials : manualResponsible;
             const urgency = document.getElementById('commentUrgency').value;
             const hasIncident = document.getElementById('commentIncident').checked;
             const text = document.getElementById('commentText').value.trim();
@@ -1361,6 +1445,8 @@ function setDailyViewMode(mode) {
                         date: dateKey,
                         time: timeStr,
                         responsible,
+                        is_personal: isPersonal,
+                        owner_initials: ownerInitials,
                         urgency,
                         has_incident: hasIncident,
                         text
@@ -1392,6 +1478,8 @@ function setDailyViewMode(mode) {
                         date: dateKey,
                         time: timeStr,
                         responsible,
+                        is_personal: isPersonal,
+                        owner_initials: ownerInitials,
                         urgency,
                         has_incident: hasIncident,
                         user_name: currentUser,
@@ -1487,7 +1575,7 @@ function setDailyViewMode(mode) {
         }
 
         function renderCommentsListContent(projectId, dateKey) {
-            const allComments = dailyComments.filter(c => c.projectId === projectId && c.date === dateKey);
+            const allComments = getVisibleCommentsByProjectDate(projectId, dateKey);
             const topLevel = allComments
                 .filter(c => !c.parentId)
                 .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -1522,6 +1610,7 @@ function setDailyViewMode(mode) {
 
                 const completedClass = c.completed ? 'completed' : '';
                 const completedBadge = c.completed ? '<span class="completion-badge">✓ COMPLETADA</span>' : '';
+                const personalBadge = c.isPersonal ? '<span class="completion-badge" style="background:#e4fff1;border-color:#8bc7a1;color:#17663a;">PRIVADA</span>' : '';
 
                 html += `<div class="comment-entry ${completedClass}">
                 <div class="comment-checkbox-wrapper">
@@ -1529,7 +1618,7 @@ function setDailyViewMode(mode) {
                            ${c.completed ? 'checked' : ''}
                            onclick="toggleCommentCompletion(event, '${c.id}')">
                     <div style="flex: 1;">
-                        <div class="comment-header">${formattedDate} [${escapeHtml(c.userName || "ND")}]${completedBadge}</div>
+                        <div class="comment-header">${formattedDate} [${escapeHtml(c.userName || "ND")}]${completedBadge}${personalBadge}</div>
                         <div class="comment-meta">Resp: [${escapeHtml(c.responsible || 'ND')}]</div>
                         <div class="comment-text">${escapeHtml(c.text).replace(/\n/g, '<br>')}</div>
                     </div>
@@ -1663,6 +1752,10 @@ function setDailyViewMode(mode) {
             const text = ta.value.trim();
             if (!text) { ta.focus(); return; }
             const parentComment = dailyComments.find(c => c.id === parentId) || null;
+            if (!canCurrentUserViewComment(parentComment)) {
+                alert('No tienes permisos para responder este comentario.');
+                return;
+            }
 
             const now = new Date();
             const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
@@ -1680,7 +1773,9 @@ function setDailyViewMode(mode) {
                     has_incident: false,
                     user_name: currentUser,
                     text,
-                    parent_id: parentId
+                    parent_id: parentId,
+                    is_personal: !!(parentComment && parentComment.isPersonal),
+                    owner_initials: parentComment ? getCommentOwnerInitials(parentComment) : normalizeInitials(currentUser || 'US')
                 });
 
             if (error) {
@@ -1738,6 +1833,10 @@ function setDailyViewMode(mode) {
                 return;
             }
             const parentComment = dailyComments.find(c => c.id === parentId) || null;
+            if (!canCurrentUserViewComment(parentComment)) {
+                alert('No tienes permisos para responder este comentario.');
+                return;
+            }
 
             const now = new Date();
             const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
@@ -1755,7 +1854,9 @@ function setDailyViewMode(mode) {
                     has_incident: false,
                     user_name: currentUser,
                     text,
-                    parent_id: parentId
+                    parent_id: parentId,
+                    is_personal: !!(parentComment && parentComment.isPersonal),
+                    owner_initials: parentComment ? getCommentOwnerInitials(parentComment) : normalizeInitials(currentUser || 'US')
                 });
 
             if (error) {
@@ -1782,6 +1883,10 @@ function setDailyViewMode(mode) {
 
             const comment = dailyComments.find(c => c.id === commentId);
             if (!comment) return;
+            if (!canCurrentUserManageComment(comment)) {
+                alert('No tienes permisos para modificar este comentario.');
+                return;
+            }
 
             const newCompletedState = !comment.completed;
 
@@ -1810,6 +1915,10 @@ function setDailyViewMode(mode) {
 
             const comment = dailyComments.find(c => c.id === commentId);
             if (!comment) return;
+            if (!canCurrentUserManageComment(comment)) {
+                alert('No tienes permisos para modificar este comentario.');
+                return;
+            }
 
             const newCompletedState = !comment.completed;
 
@@ -1852,6 +1961,10 @@ function setDailyViewMode(mode) {
                 console.error('Comentario no encontrado:', commentId);
                 return;
             }
+            if (!canCurrentUserManageComment(comment)) {
+                alert('No tienes permisos para editar este comentario.');
+                return;
+            }
             // console.log('Comentario encontrado:', comment);
             closeCommentsListModal();
             openDailyCommentModal(comment.date, comment.projectId);
@@ -1861,6 +1974,12 @@ function setDailyViewMode(mode) {
         async function deleteComment(commentId) {
             const confirmed = confirm('¿Seguro que quieres borrar este comentario?');
             if (!confirmed) return;
+
+            const comment = dailyComments.find(c => c.id === commentId);
+            if (comment && !canCurrentUserManageComment(comment)) {
+                alert('No tienes permisos para borrar este comentario.');
+                return;
+            }
 
             const { projectId, dateKey } = commentsListContext;
 
@@ -3075,8 +3194,7 @@ function renderLastStatusWidget() {
             }
 
             // --- Comentarios (FORMATO EXACTO DAILY, CON HILOS) ---
-            const projectComments = dailyComments
-                .filter(c => c.projectId === currentProjectId);
+            const projectComments = getVisibleCommentsByProject(currentProjectId);
             const projectTopLevelComments = projectComments
                 .filter(c => !c.parentId)
                 .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -3122,6 +3240,7 @@ function renderLastStatusWidget() {
                     const isCompleted = comment.completed;
                     const completedClass = isCompleted ? 'completed' : '';
                     const completedBadge = isCompleted ? '<span class="completion-badge">COMPLETADO</span>' : '';
+                    const personalBadge = comment.isPersonal ? '<span class="completion-badge" style="background:#e4fff1;border-color:#8bc7a1;color:#17663a;">PRIVADA</span>' : '';
 
                     html += `
             <div class="comment-entry ${completedClass}">
@@ -3150,7 +3269,7 @@ function renderLastStatusWidget() {
                             </span>
                          </div>
                          
-                         ${completedBadge}
+                         ${completedBadge}${personalBadge}
                     </div>
                 </div>
                 <div class="comment-text" style="margin-top:6px; padding-left: 58px; font-size: 12px; overflow-wrap:anywhere; word-break:break-word;">
@@ -3940,6 +4059,8 @@ function sortDailyProjects(projects) {
                 date: c.date,
                 time: c.time,
                 responsible: c.responsible,
+                isPersonal: !!c.is_personal,
+                ownerInitials: normalizeInitials(c.owner_initials || c.user_name || ''),
                 urgency: c.urgency || 'Normal',
                 hasIncident: !!c.has_incident,
                 text: c.text || '',
