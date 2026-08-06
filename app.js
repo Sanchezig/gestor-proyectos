@@ -4053,7 +4053,7 @@ function sortDailyProjects(projects) {
 
 
 
-            dailyComments = (comData || []).map(c => ({
+            const mappedComments = (comData || []).map(c => ({
                 id: c.id,
                 projectId: c.project_id,
                 date: c.date,
@@ -4069,6 +4069,10 @@ function sortDailyProjects(projects) {
                 parentId: c.parent_id || null,
                 createdAt: c.created_at
             }));
+
+            // Refuerzo de privacidad: las tareas personales de otros usuarios
+            // no se conservan en memoria del cliente actual.
+            dailyComments = mappedComments.filter(c => canCurrentUserViewComment(c));
 
 
             renderProjectsList();
