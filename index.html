@@ -156,6 +156,27 @@
         </div>
     </div>
 
+    <div class="modal" id="dayPersonalTasksModal">
+        <div class="modal-content">
+            <div class="day-personal-modal-header">
+                <button class="btn btn-cancel day-personal-nav-btn" onclick="previousDayPersonalTasksDate()">◀</button>
+                <div class="modal-title" id="dayPersonalTasksTitle">Tareas personales del dia</div>
+                <button class="btn btn-cancel day-personal-nav-btn" onclick="nextDayPersonalTasksDate()">▶</button>
+            </div>
+
+            <div id="dayPersonalTasksList"></div>
+
+            <div class="day-personal-add-row">
+                <input type="text" id="dayPersonalTaskInput" placeholder="Nueva tarea personal del dia..." onkeydown="if(event.key==='Enter') addDayPersonalTask()">
+                <button class="btn btn-primary" onclick="addDayPersonalTask()">Añadir</button>
+            </div>
+
+            <div class="modal-buttons">
+                <button class="btn btn-cancel" onclick="closeDayPersonalTasksModal()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
     <div class="modal" id="userSettingsModal">
         <div class="modal-content">
             <div class="modal-title">Ajustes de usuario</div>

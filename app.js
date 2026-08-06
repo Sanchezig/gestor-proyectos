@@ -68,12 +68,14 @@ let projectNoteEditorState = {
 };
 let weeklyTasks = [];
 let incidents = [];
+let dayPersonalTasks = [];
 let currentUser = null;
 const APP_LOGIN_PASSWORD = 'admin123';
 const APP_LOGIN_STORAGE_KEY = 'wtw_login_session_v1';
 const APP_CURRENT_USER_STORAGE_KEY = 'wtw_current_user';
 const APP_USERS_STORAGE_KEY = 'wtw_user_directory_v1';
 const APP_USERS_TABLE = 'app_users';
+const DAY_PERSONAL_TASKS_TABLE = 'day_personal_tasks';
 const APP_LOGIN_EXPIRY_DAYS = 30;
 const DEFAULT_USERS = [
     { initials: 'AP', email: 'alvaro.perez@wtwco.com' },
@@ -436,6 +438,7 @@ async function updateIndicator(event, projectId, field, value) {
         let currentWeekStart = getMonday(new Date());
         let editingCommentId = null;
         let commentsListContext = { projectId: null, dateKey: null };
+        let dayPersonalTasksModalContext = { dateKey: null };
         let expandedCommentThreads = new Set();
         let activeReplyCommentId = null;
         let dailyFilters = {
@@ -961,6 +964,211 @@ function setDailyViewMode(mode) {
             return { pendingTeam, pendingPersonal };
         }
 
+        function parseDateKeyToDate(dateKey) {
+            const raw = String(dateKey || '').trim();
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+            const d = new Date(`${raw}T00:00:00`);
+            if (isNaN(d.getTime())) return null;
+            return d;
+        }
+
+        function isWeekendDate(dateObj) {
+            if (!dateObj) return false;
+            const day = dateObj.getDay();
+            return day === 0 || day === 6;
+        }
+
+        function shiftBusinessDate(dateKey, direction) {
+            const safeDirection = direction < 0 ? -1 : 1;
+            let cursor = parseDateKeyToDate(dateKey) || new Date();
+
+            do {
+                cursor.setDate(cursor.getDate() + safeDirection);
+            } while (isWeekendDate(cursor));
+
+            return formatDateKey(cursor);
+        }
+
+        function getCurrentUserDayPersonalTasksByDate(dateKey) {
+            const owner = normalizeInitials(currentUser || '');
+            return (dayPersonalTasks || []).filter(t =>
+                t.ownerInitials === owner &&
+                t.date === dateKey
+            );
+        }
+
+        function getDayHeaderButtonState(dateKey) {
+            const tasks = getCurrentUserDayPersonalTasksByDate(dateKey);
+            if (!tasks.length) return 'none';
+            const hasPending = tasks.some(t => !t.completed);
+            return hasPending ? 'pending' : 'done';
+        }
+
+        function getDayHeaderButtonClass(dateKey) {
+            const state = getDayHeaderButtonState(dateKey);
+            if (state === 'pending') return 'is-pending';
+            if (state === 'done') return 'is-done';
+            return '';
+        }
+
+        function getDayHeaderButtonTitle(dateKey) {
+            const tasks = getCurrentUserDayPersonalTasksByDate(dateKey);
+            if (!tasks.length) return 'Tareas personales del dia';
+            const pending = tasks.filter(t => !t.completed).length;
+            if (pending > 0) return `${pending} pendiente(s) en tareas personales del dia`;
+            return 'Tareas personales del dia completadas';
+        }
+
+        function formatDayPersonalModalTitle(dateKey) {
+            const dateObj = parseDateKeyToDate(dateKey);
+            if (!dateObj) return 'Tareas personales del dia';
+            const weekday = dateObj.toLocaleDateString('es-ES', { weekday: 'long' });
+            const niceWeekday = weekday.charAt(0).toUpperCase() + weekday.slice(1);
+            const niceDate = dateObj.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            return `${niceWeekday} ${niceDate}`;
+        }
+
+        function openDayPersonalTasksModal(event, dateKey) {
+            if (event) {
+                event.stopPropagation();
+            }
+            dayPersonalTasksModalContext.dateKey = dateKey;
+            renderDayPersonalTasksModal();
+            const modal = document.getElementById('dayPersonalTasksModal');
+            if (modal) modal.classList.add('active');
+        }
+
+        function closeDayPersonalTasksModal() {
+            const modal = document.getElementById('dayPersonalTasksModal');
+            if (modal) modal.classList.remove('active');
+            const input = document.getElementById('dayPersonalTaskInput');
+            if (input) input.value = '';
+        }
+
+        function previousDayPersonalTasksDate() {
+            const current = dayPersonalTasksModalContext.dateKey || formatDateKey(new Date());
+            dayPersonalTasksModalContext.dateKey = shiftBusinessDate(current, -1);
+            renderDayPersonalTasksModal();
+        }
+
+        function nextDayPersonalTasksDate() {
+            const current = dayPersonalTasksModalContext.dateKey || formatDateKey(new Date());
+            dayPersonalTasksModalContext.dateKey = shiftBusinessDate(current, 1);
+            renderDayPersonalTasksModal();
+        }
+
+        function renderDayPersonalTasksModal() {
+            const dateKey = dayPersonalTasksModalContext.dateKey || formatDateKey(new Date());
+            dayPersonalTasksModalContext.dateKey = dateKey;
+
+            const titleEl = document.getElementById('dayPersonalTasksTitle');
+            if (titleEl) titleEl.textContent = formatDayPersonalModalTitle(dateKey);
+
+            const listEl = document.getElementById('dayPersonalTasksList');
+            if (!listEl) return;
+
+            const tasks = getCurrentUserDayPersonalTasksByDate(dateKey)
+                .slice()
+                .sort((a, b) => {
+                    if (a.completed !== b.completed) return a.completed ? 1 : -1;
+                    return new Date(b.createdAt) - new Date(a.createdAt);
+                });
+
+            if (!tasks.length) {
+                listEl.innerHTML = '<div class="empty-state" style="padding:8px 0;">No hay tareas personales para este dia.</div>';
+                return;
+            }
+
+            let html = '<div class="day-personal-list">';
+            tasks.forEach(task => {
+                html += `
+                <div class="day-personal-item${task.completed ? ' done' : ''}">
+                    <label class="day-personal-item-main">
+                        <input type="checkbox" ${task.completed ? 'checked' : ''} onchange="toggleDayPersonalTask('${task.id}', this.checked)">
+                        <span>${escapeHtml(task.text)}</span>
+                    </label>
+                    <button class="day-personal-delete" onclick="deleteDayPersonalTask('${task.id}')" title="Borrar">×</button>
+                </div>`;
+            });
+            html += '</div>';
+
+            listEl.innerHTML = html;
+        }
+
+        async function addDayPersonalTask() {
+            const input = document.getElementById('dayPersonalTaskInput');
+            if (!input) return;
+            const text = input.value.trim();
+            if (!text) {
+                input.focus();
+                return;
+            }
+
+            const dateKey = dayPersonalTasksModalContext.dateKey || formatDateKey(new Date());
+            const owner = normalizeInitials(currentUser || 'US');
+
+            const { error } = await supabaseClient
+                .from(DAY_PERSONAL_TASKS_TABLE)
+                .insert({
+                    owner_initials: owner,
+                    task_date: dateKey,
+                    text,
+                    completed: false
+                });
+
+            if (error) {
+                console.error(error);
+                alert('Error guardando tarea personal del dia');
+                return;
+            }
+
+            input.value = '';
+            await loadDayPersonalTasks();
+            renderDayPersonalTasksModal();
+            renderDaily();
+        }
+
+        async function toggleDayPersonalTask(taskId, done) {
+            const owner = normalizeInitials(currentUser || 'US');
+            const { error } = await supabaseClient
+                .from(DAY_PERSONAL_TASKS_TABLE)
+                .update({ completed: !!done })
+                .eq('id', taskId)
+                .eq('owner_initials', owner);
+
+            if (error) {
+                console.error(error);
+                alert('Error actualizando tarea personal del dia');
+                return;
+            }
+
+            await loadDayPersonalTasks();
+            renderDayPersonalTasksModal();
+            renderDaily();
+        }
+
+        async function deleteDayPersonalTask(taskId) {
+            const confirmed = confirm('¿Borrar esta tarea personal del dia?');
+            if (!confirmed) return;
+
+            const owner = normalizeInitials(currentUser || 'US');
+            const { error } = await supabaseClient
+                .from(DAY_PERSONAL_TASKS_TABLE)
+                .delete()
+                .eq('id', taskId)
+                .eq('owner_initials', owner);
+
+            if (error) {
+                console.error(error);
+                alert('Error borrando tarea personal del dia');
+                return;
+            }
+
+            await loadDayPersonalTasks();
+            renderDayPersonalTasksModal();
+            renderDaily();
+        }
+
         function renderDaily() {
             // 1. Si no hay proyectos en absoluto (base de datos vacía), mostrar mensaje inicial
             if (!projects.length) {
@@ -1062,8 +1270,11 @@ function setDailyViewMode(mode) {
                 }
 
                 const holidayBadge = isHoliday ? '<span style="position:absolute;top:4px;right:6px;font-size:9px;color:#d32f2f;font-weight:700;">FESTIVO</span>' : '';
+                const dayTaskBtnClass = getDayHeaderButtonClass(dateKey);
+                const dayTaskBtnTitle = escapeHtml(getDayHeaderButtonTitle(dateKey));
+                const dayTaskBtn = `<button class="day-header-task-btn ${dayTaskBtnClass}" title="${dayTaskBtnTitle}" onclick="openDayPersonalTasksModal(event, '${dateKey}')">+</button>`;
 
-                html += `<th class="${headerClass}" style="position:relative;">${holidayBadge}${dayName}<br>${dateStr}</th>`;
+                html += `<th class="${headerClass}" style="position:relative;">${holidayBadge}${dayTaskBtn}${dayName}<br>${dateStr}</th>`;
             });
 
             html += '</tr>';
@@ -2557,6 +2768,30 @@ function renderCapacityWidget() {
     }));
 }
 
+        async function loadDayPersonalTasks() {
+    const { data, error } = await supabaseClient
+        .from(DAY_PERSONAL_TASKS_TABLE)
+        .select('*')
+        .order('task_date', { ascending: true })
+        .order('created_at', { ascending: true });
+
+    if (error) {
+        console.error('Error cargando tareas personales del dia:', formatSupabaseError(error, 'No se pudieron cargar tareas personales del dia'));
+        dayPersonalTasks = [];
+        return;
+    }
+
+    dayPersonalTasks = (data || []).map(t => ({
+        id: t.id,
+        ownerInitials: normalizeInitials(t.owner_initials || ''),
+        date: t.task_date,
+        text: t.text || '',
+        completed: !!t.completed,
+        createdAt: t.created_at,
+        updatedAt: t.updated_at || t.created_at
+    }));
+}
+
 
         // Función para pintar el widget con Historial y Scroll
 function renderLastStatusWidget() {
@@ -3983,6 +4218,7 @@ function sortDailyProjects(projects) {
             await loadProjectNotes();
             await loadWeeklyTasks();
             await loadIncidents();
+            await loadDayPersonalTasks();
             const { data: projData, error: projError } = await supabaseClient
                 .from('projects')
                 .select('*')
@@ -4127,6 +4363,7 @@ function sortDailyProjects(projects) {
 
         let weeklyTasksChannel = supabaseClient.channel('weekly-tasks-changes');
         let incidentsChannel = supabaseClient.channel('incidents-changes');
+        let dayPersonalTasksChannel = supabaseClient.channel('day-personal-tasks-changes');
 
         weeklyTasksChannel
             .on('postgres_changes',
@@ -4144,6 +4381,20 @@ function sortDailyProjects(projects) {
                 async () => {
                     await loadIncidents();
                     renderIncidentsWidgetInPlace();
+                }
+            )
+            .subscribe();
+
+        dayPersonalTasksChannel
+            .on('postgres_changes',
+                { event: '*', schema: 'public', table: DAY_PERSONAL_TASKS_TABLE },
+                async () => {
+                    await loadDayPersonalTasks();
+                    renderDaily();
+                    const modal = document.getElementById('dayPersonalTasksModal');
+                    if (modal && modal.classList.contains('active')) {
+                        renderDayPersonalTasksModal();
+                    }
                 }
             )
             .subscribe();
@@ -4782,6 +5033,10 @@ function sortDailyProjects(projects) {
             updateUserDisplay();
             syncTeamMembersInSelectors();
             renderDaily();
+            const dayModal = document.getElementById('dayPersonalTasksModal');
+            if (dayModal && dayModal.classList.contains('active')) {
+                renderDayPersonalTasksModal();
+            }
             if (document.getElementById('fichaView')?.classList.contains('active')) {
                 renderFicha();
             }
