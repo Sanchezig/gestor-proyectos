@@ -17,7 +17,9 @@
             <h1 class="login-title">Gestor de Proyectos</h1>
 
             <div class="login-form">
+                <label class="visually-hidden" for="loginInitials">Iniciales</label>
                 <input type="text" id="loginInitials" class="login-input" placeholder="Iniciales (ej: IS)" autocomplete="username" maxlength="6">
+                <label class="visually-hidden" for="loginPassword">Contraseña</label>
                 <input type="password" id="loginPassword" class="login-input" placeholder="Contraseña" autocomplete="current-password">
                 <button class="login-button" id="loginButton" type="button">Entrar</button>
                 <div class="login-error" id="loginError" aria-live="polite"></div>
@@ -28,7 +30,7 @@
     <div id="appShell" class="app-shell app-shell--hidden">
     <div class="container">
         <div class="sidebar" id="sidebar">
-            <button class="sidebar-toggle-btn" id="sidebarToggle" onclick="toggleSidebar()" title="Contraer panel">◀</button>
+            <button class="sidebar-toggle-btn" id="sidebarToggle" onclick="toggleSidebar()" title="Contraer panel" aria-label="Contraer panel">◀</button>
             <div class="sidebar-logo">WTW</div>
             <div class="sidebar-subtitle">Gestor de proyectos</div>
             <button class="btn-new-project" onclick="openNewProjectModal()">✨ Nuevo proyecto</button>
@@ -55,6 +57,7 @@
         <div class="main-content">
             <div class="toolbar">
                 <div class="toolbar-left">
+                    <button class="mobile-menu-toggle" id="mobileMenuToggle" type="button" aria-label="Abrir menú de proyectos" aria-controls="sidebar" aria-expanded="false" onclick="toggleMobileSidebar()">☰</button>
                     <h2 id="viewTitle">Daily</h2>
                 </div>
                 <div class="view-toggle">
@@ -93,18 +96,19 @@
             </div>
         </div>
     </div>
+    <button class="sidebar-backdrop" id="sidebarBackdrop" type="button" aria-label="Cerrar menú de proyectos" onclick="closeMobileSidebar()"></button>
 
     <div class="modal" id="dailyModal">
-        <div class="modal-content">
+        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="dailyModalTitle">
             <div class="modal-title" id="dailyModalTitle">Nuevo comentario Daily</div>
             <div class="form-group">
-                <label>Proyecto</label>
+                <label for="commentProjectSelect">Proyecto</label>
                 <select id="commentProjectSelect" onchange="updateAvailableTasks()">
                     <option value="">Selecciona un proyecto...</option>
                 </select>
             </div>
             <div class="form-group">
-                <label>Responsable</label>
+                <label for="commentResponsible">Responsable</label>
                 <select id="commentResponsible">
                     <option value="">Selecciona...</option>
                     <option value="IS">IS</option>
@@ -115,7 +119,7 @@
                 </select>
             </div>
             <div class="form-group">
-                <label>Urgencia</label>
+                <label for="commentUrgency">Urgencia</label>
                 <select id="commentUrgency">
                     <option value="Normal">Normal</option>
                     <option value="Alta">Alta</option>
@@ -135,7 +139,7 @@
                 </label>
             </div>
             <div class="form-group">
-                <label>Comentario</label>
+                <label for="commentText">Comentario</label>
                 <textarea id="commentText" placeholder="Escribe tu comentario..."></textarea>
             </div>
             <div class="modal-buttons">
@@ -146,8 +150,8 @@
     </div>
 
     <div class="modal" id="commentsListModal">
-        <div class="modal-content">
-            <div class="modal-title">Comentarios del día</div>
+        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="commentsListTitle">
+            <div class="modal-title" id="commentsListTitle">Comentarios del día</div>
             <div id="commentsListContainer"></div>
             <div class="modal-buttons">
                 <button class="btn btn-primary" onclick="openAddCommentFromList()">Añadir más</button>
@@ -157,7 +161,7 @@
     </div>
 
     <div class="modal" id="dayPersonalTasksModal">
-        <div class="modal-content">
+        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="dayPersonalTasksTitle">
             <div class="day-personal-modal-header">
                 <button class="btn btn-cancel day-personal-nav-btn" onclick="previousDayPersonalTasksDate()">◀</button>
                 <div class="modal-title" id="dayPersonalTasksTitle">Tareas personales del dia</div>
@@ -167,6 +171,7 @@
             <div id="dayPersonalTasksList"></div>
 
             <div class="day-personal-add-row">
+                <label class="visually-hidden" for="dayPersonalTaskInput">Nueva tarea personal del día</label>
                 <input type="text" id="dayPersonalTaskInput" placeholder="Nueva tarea personal del dia..." onkeydown="if(event.key==='Enter') addDayPersonalTask()">
                 <button class="btn btn-primary" onclick="addDayPersonalTask()">Añadir</button>
             </div>
@@ -177,27 +182,42 @@
         </div>
     </div>
 
+    <div class="modal" id="vacationOptionsModal">
+        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="vacationOptionsTitle">
+            <div class="modal-title" id="vacationOptionsTitle">Asignar vacaciones</div>
+            <p class="vacation-selection-label" id="vacationSelectionLabel"></p>
+            <div class="form-group">
+                <label for="vacationTypeSelect">Imputar al saldo</label>
+                <select id="vacationTypeSelect"></select>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-primary" type="button" onclick="saveVacationSelection()">Guardar</button>
+                <button class="btn btn-cancel" type="button" onclick="closeVacationOptionsModal()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
     <div class="modal" id="userSettingsModal">
-        <div class="modal-content">
-            <div class="modal-title">Ajustes de usuario</div>
+        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="userSettingsTitle">
+            <div class="modal-title" id="userSettingsTitle">Ajustes de usuario</div>
 
             <div class="form-group">
-                <label>Iniciales</label>
+                <label for="settingsInitials">Iniciales</label>
                 <input type="text" id="settingsInitials" maxlength="6" placeholder="Ej: IS">
             </div>
 
             <div class="form-group">
-                <label>Email</label>
+                <label for="settingsEmail">Email</label>
                 <input type="email" id="settingsEmail" placeholder="nombre.apellido@wtwco.com">
             </div>
 
             <div class="form-group">
-                <label>Nueva contraseña</label>
+                <label for="settingsPassword">Nueva contraseña</label>
                 <input type="password" id="settingsPassword" placeholder="Dejar vacío para no cambiar">
             </div>
 
             <div class="form-group">
-                <label>Confirmar nueva contraseña</label>
+                <label for="settingsPasswordConfirm">Confirmar nueva contraseña</label>
                 <input type="password" id="settingsPasswordConfirm" placeholder="Repite la nueva contraseña">
             </div>
 
@@ -212,22 +232,22 @@
     </div>
 
     <div class="modal" id="projectModal">
-        <div class="modal-content modal-project">
-            <div class="modal-title">Crear nuevo proyecto</div>
+        <div class="modal-content modal-project" role="dialog" aria-modal="true" aria-labelledby="projectModalTitle">
+            <div class="modal-title" id="projectModalTitle">Crear nuevo proyecto</div>
             <div class="form-group">
-                <label>Nombre de la iniciativa</label>
+                <label for="projectName">Nombre de la iniciativa</label>
                 <input type="text" id="projectName" placeholder="Ej: Automatización de Claims...">
             </div>
             <div class="form-group">
-                <label>Fecha inicio</label>
+                <label for="projectStartDate">Fecha inicio</label>
                 <input type="date" id="projectStartDate">
             </div>
             <div class="form-group">
-                <label>Fecha fin</label>
+                <label for="projectEndDate">Fecha fin</label>
                 <input type="date" id="projectEndDate">
             </div>
             <div class="form-group">
-                <label>Fase del proyecto</label>
+                <label for="projectPhase">Fase del proyecto</label>
                 <select id="projectPhase">
                     <option value="Idea">Idea</option>
                     <option value="En Progreso">En Progreso</option>
@@ -238,15 +258,15 @@
                 </select>
             </div>
             <div class="form-group">
-                <label>Stakeholders</label>
+                <label for="projectStakeholders">Stakeholders</label>
                 <input type="text" id="projectStakeholders" placeholder="Ej: Juan (Product Owner), María (IT), ...">
             </div>
             <div class="form-group">
-                <label>Ahorro (€)</label>
+                <label for="volume">Ahorro (€)</label>
                 <input type="number" id="volume" placeholder="Ej: 50000" min="0" step="0.01">
             </div>
             <div class="form-group">
-                <label>Ahorro (FTE)</label>
+                <label for="fte">Ahorro (FTE)</label>
                 <input type="number" id="fte" placeholder="Ej: 1.5" min="0" step="0.1">
             </div>
 

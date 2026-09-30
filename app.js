@@ -379,31 +379,40 @@ async function updateIndicator(event, projectId, field, value) {
 }
 
 
-        const madridHolidays = [
-            '2025-01-01', '2025-01-06',
-            '2025-04-17', '2025-04-18',
-            '2025-05-01', '2025-05-02',
-            '2025-07-25', '2025-08-15',
-            '2025-10-12', '2025-11-01', '2025-11-09',
-            '2025-12-06', '2025-12-08', '2025-12-25',
-            '2026-01-01', '2026-01-06',
-            '2026-04-02', '2026-04-03',
-            '2026-05-01', '2026-05-02', '2026-05-15',
-            '2026-08-15',
-            '2026-10-12', '2027-11-02', '2026-11-09',
-            '2026-12-07', '2027-12-08', '2027-12-25',
-            '2027-01-01', '2027-01-06',
-            '2027-03-25', '2027-03-26',
-            '2027-05-01',
-            '2027-10-12',
-            '2027-11-01',
-            '2027-12-06', '2027-12-08', '2027-12-25'
-        ];
+        const madridHolidaysByYear = {
+            2025: [
+                '2025-01-01', '2025-01-06',
+                '2025-04-17', '2025-04-18',
+                '2025-05-01', '2025-05-02',
+                '2025-07-25', '2025-08-15',
+                '2025-10-12', '2025-11-01', '2025-11-09',
+                '2025-12-06', '2025-12-08', '2025-12-25'
+            ],
+            2026: [
+                '2026-01-01', '2026-01-06',
+                '2026-04-02', '2026-04-03',
+                '2026-05-01', '2026-05-02', '2026-05-15',
+                '2026-08-15',
+                '2026-10-12', '2026-11-02', '2026-11-09',
+                '2026-12-08', '2026-12-25'
+            ],
+            2027: [
+                '2027-01-01', '2027-01-06',
+                '2027-03-25', '2027-03-26',
+                '2027-05-01',
+                '2027-10-12',
+                '2027-11-01',
+                '2027-12-06', '2027-12-08', '2027-12-25'
+            ]
+        };
+        const madridHolidays = new Set(Object.values(madridHolidaysByYear).flat());
 
         let projects = [];
         let dailyComments = [];
         let teamVacations = [];
         let selectedVacationDays = []; // Rastrear días seleccionados para vacaciones
+        let pendingVacationSelection = null;
+        let vacationBalanceYear = new Date().getFullYear();
         let currentMonth = new Date();
         let sidebarAutoCollapsed = false; // Indica si el sidebar fue colapsado automáticamente por la vista Equipo
         let calendarZoom = 0; // 0=compact(8px) 1=medium(16px) 2=detail(28px)
@@ -870,6 +879,7 @@ function setDailyViewMode(mode) {
         }
 
         function selectProject(projectId) {
+            closeMobileSidebar();
             currentProjectId = projectId;
 
             // Detectar si el proyecto seleccionado es completado
@@ -1255,7 +1265,7 @@ function setDailyViewMode(mode) {
             weekDates.forEach((date) => {
                 const dateKey = date.toISOString().slice(0, 10);
                 const isToday = dateKey === new Date().toISOString().slice(0, 10);
-                const isHoliday = madridHolidays.includes(dateKey);
+                const isHoliday = madridHolidays.has(dateKey);
 
                 const dayNameRaw = date.toLocaleDateString('es-ES', { weekday: 'long' });
                 const dayName = dayNameRaw.charAt(0).toUpperCase() + dayNameRaw.slice(1);
@@ -1377,7 +1387,7 @@ function setDailyViewMode(mode) {
                         const { pendingTeam, pendingPersonal } = commentCountsForCell(topLevelComments);
                         const hasTeamPending = pendingTeam > 0;
                         const hasPersonalPending = pendingPersonal > 0;
-                        const isHoliday = madridHolidays.includes(dateKey);
+                        const isHoliday = madridHolidays.has(dateKey);
                         const isToday = dateKey === new Date().toISOString().slice(0, 10);
                         let highlightClass = '';
                         if (hasTeamPending && hasPersonalPending) {
@@ -1397,9 +1407,9 @@ function setDailyViewMode(mode) {
                         if (topLevelComments.length > 0) {
                             const latest = topLevelComments.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
                             const shortText = latest.text.length > 60 ? latest.text.slice(0, 60) + '…' : latest.text;
-                            previewText = shortText.replace(/\n/g, ' ');
+                            previewText = escapeHtml(shortText.replace(/\n/g, ' '));
                             const threadBadge = threadsWithReplies > 0 ? ` · <span class="cell-thread-badge">💬 ${threadsWithReplies}</span>` : '';
-                            metaText = `${topLevelComments.length} comentario(s) · ${latest.urgency}${latest.hasIncident ? ' · INCIDENCIA' : ''}${threadBadge}`;
+                            metaText = `${topLevelComments.length} comentario(s) · ${escapeHtml(latest.urgency)}${latest.hasIncident ? ' · INCIDENCIA' : ''}${threadBadge}`;
                         }
 
                         html += `<td class="${cellClass}">
@@ -2819,9 +2829,9 @@ function renderLastStatusWidget() {
     html += `
     <div class="current-status-highlight">
         <div class="status-meta" style="color:#7a1ea2; font-weight:bold; margin-bottom:8px; font-size:11px;">
-            ${dateStr} - ${last.userInitials}
+            ${dateStr} - ${escapeHtml(last.userInitials)}
         </div>
-        <div class="status-content" style="font-size:13px; color:#333; line-height:1.4;">${last.statusText}</div>
+        <div class="status-content" style="font-size:13px; color:#333; line-height:1.4;">${escapeHtml(last.statusText)}</div>
     </div>`;
     } else {
         html += `<div class="empty-state" style="padding:10px;">No hay estados registrados.</div>`;
@@ -2842,9 +2852,9 @@ function renderLastStatusWidget() {
             <div class="history-item">
                 <div class="status-meta" style="display:flex; justify-content:space-between; font-size:10px; color:#999; margin-bottom:2px;">
                     <span>${dateStr}</span>
-                    <span>${s.userInitials}</span>
+                    <span>${escapeHtml(s.userInitials)}</span>
                 </div>
-                <div style="color:#555; font-size:11px;">${s.statusText}</div>
+                <div style="color:#555; font-size:11px;">${escapeHtml(s.statusText)}</div>
             </div>`;
         });
         
@@ -4141,6 +4151,7 @@ function sortDailyProjects(projects) {
 
 
         function switchView(view) {
+            closeMobileSidebar();
             // Si salimos de Equipo y el sidebar fue colapsado automáticamente, restaurarlo
             if (view !== 'equipo' && sidebarAutoCollapsed) {
                 const sidebar = document.getElementById('sidebar');
@@ -4193,7 +4204,7 @@ function sortDailyProjects(projects) {
                 // Contraer sidebar automáticamente para ganar visibilidad
                 const sidebar = document.getElementById('sidebar');
                 const toggleBtn = document.getElementById('sidebarToggle');
-                if (sidebar && !sidebar.classList.contains('collapsed')) {
+                if (sidebar && window.matchMedia('(min-width: 769px)').matches && !sidebar.classList.contains('collapsed')) {
                     sidebar.classList.add('collapsed');
                     if (toggleBtn) { toggleBtn.textContent = '▶'; toggleBtn.title = 'Expandir panel'; }
                     sidebarAutoCollapsed = true;
@@ -4411,6 +4422,9 @@ function sortDailyProjects(projects) {
 
             // Header con navegación de año
             const year = currentMonth.getFullYear();
+            const holidayCalendarStatus = Object.hasOwn(madridHolidaysByYear, year)
+                ? `<div class="holiday-calendar-status">Fechas festivas cargadas para ${year}</div>`
+                : `<div class="holiday-calendar-status holiday-calendar-status--pending" role="status">Calendario oficial de festivos ${year} pendiente de validar y cargar.</div>`;
 
             let html = `
     <div class="team-header">
@@ -4426,6 +4440,7 @@ function sortDailyProjects(projects) {
         </div>
         <button class="month-nav-btn" onclick="openVacationModal()">➕ Añadir vacaciones</button>
     </div>
+    ${holidayCalendarStatus}
 `;
 
 
@@ -4502,7 +4517,7 @@ function sortDailyProjects(projects) {
                             const dateKey = formatDateKey(date);
                             const dayOfWeek = date.getDay();
                             const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-                            const isHoliday = madridHolidays.includes(dateKey);
+                            const isHoliday = madridHolidays.has(dateKey);
 
                             const vacation = teamVacations.find(v =>
                                 v.user_initials === member &&
@@ -4594,52 +4609,67 @@ function sortDailyProjects(projects) {
 
         function renderVacationSummary() {
             const currentYear = new Date().getFullYear();
+            const availableYears = [...new Set([
+                currentYear,
+                currentYear - 1,
+                currentMonth.getFullYear(),
+                ...teamVacations.map(getVacationAccrualYear).filter(Number.isInteger)
+            ])].sort((a, b) => b - a);
+            if (!availableYears.includes(vacationBalanceYear)) {
+                vacationBalanceYear = currentYear;
+            }
 
             // Calcular totales por usuario
             const summary = teamMembers.map(member => {
-                // Vacaciones año actual
-                const currentYearDays = teamVacations
+                const vacationDays = teamVacations
                     .filter(v =>
                         v.user_initials === member &&
-                        v.vacation_type === 'current_year' &&
-                        (v.vacation_year === currentYear || new Date(v.start_date).getFullYear() === currentYear)
+                        v.vacation_type !== 'willis_choice' &&
+                        getVacationAccrualYear(v) === vacationBalanceYear
                     )
                     .reduce((sum, v) => sum + (Number(v.days_count) || 0), 0);
 
-                // Willis Choice año actual
                 const willisChoiceDays = teamVacations
                     .filter(v =>
                         v.user_initials === member &&
                         v.vacation_type === 'willis_choice' &&
-                        new Date(v.start_date).getFullYear() === currentYear
+                        getVacationAccrualYear(v) === vacationBalanceYear
                     )
                     .reduce((sum, v) => sum + (Number(v.days_count) || 0), 0);
 
                 return {
                     member,
-                    currentYearDays,
+                    vacationDays,
                     willisChoiceDays,
-                    total: currentYearDays + willisChoiceDays
+                    total: vacationDays + willisChoiceDays
                 };
             });
 
             return `
         <div class="vacation-summary">
-            <h3 class="summary-title">Resumen de Vacaciones ${currentYear}</h3>
+            <div class="vacation-summary-heading">
+                <h3 class="summary-title">Consumo de vacaciones</h3>
+                <label class="vacation-year-filter">
+                    <span>Año del consumo</span>
+                    <select aria-label="Año del consumo de vacaciones" onchange="setVacationBalanceYear(this.value)">
+                        ${availableYears.map(year => `<option value="${year}" ${year === vacationBalanceYear ? 'selected' : ''}>${year}</option>`).join('')}
+                    </select>
+                </label>
+            </div>
             <table class="summary-table">
                 <thead>
                     <tr>
                         <th>Usuario</th>
-                        <th>Año Actual</th>
+                        <th>Vacaciones imputadas</th>
                         <th>Willis Choice</th>
-                        <th class="total-column">Total</th>
+                        <th class="total-column">Total usado</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${summary.map(s => `
                         <tr>
                             <td class="member-name">${s.member}</td>
-                            <td class="vacation-current">${s.currentYearDays.toFixed(1)}</td>
+                            <td class="vacation-current">${s.vacationDays.toFixed(1)}</td>
                             <td class="vacation-willis">${s.willisChoiceDays.toFixed(1)}</td>
                             <td class="total-column"><strong>${s.total.toFixed(1)}</strong></td>
                         </tr>
@@ -4648,6 +4678,21 @@ function sortDailyProjects(projects) {
             </table>
         </div>
     `;
+        }
+
+        function getVacationAccrualYear(vacation) {
+            const storedYear = Number(vacation.vacation_year);
+            if (Number.isInteger(storedYear) && storedYear > 0) return storedYear;
+
+            const dateYear = Number(String(vacation.start_date || '').slice(0, 4));
+            return vacation.vacation_type === 'previous_year' ? dateYear - 1 : dateYear;
+        }
+
+        function setVacationBalanceYear(year) {
+            const parsedYear = Number(year);
+            if (!Number.isInteger(parsedYear)) return;
+            vacationBalanceYear = parsedYear;
+            renderTeamView();
         }
 
         function previousMonth() {
@@ -4707,9 +4752,52 @@ function sortDailyProjects(projects) {
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const btn = document.getElementById('sidebarToggle');
+            if (window.matchMedia('(max-width: 768px)').matches) {
+                closeMobileSidebar();
+                return;
+            }
             const collapsed = sidebar.classList.toggle('collapsed');
             btn.textContent = collapsed ? '▶' : '◀';
             btn.title = collapsed ? 'Expandir panel' : 'Contraer panel';
+            btn.setAttribute('aria-label', btn.title);
+        }
+
+        function toggleMobileSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const backdrop = document.getElementById('sidebarBackdrop');
+            const menuButton = document.getElementById('mobileMenuToggle');
+            if (!sidebar || !backdrop || !menuButton) return;
+
+            const isOpen = sidebar.classList.toggle('mobile-open');
+            backdrop.classList.toggle('active', isOpen);
+            menuButton.setAttribute('aria-expanded', String(isOpen));
+            document.body.classList.toggle('mobile-sidebar-open', isOpen);
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            if (sidebarToggle) {
+                sidebarToggle.textContent = isOpen ? '×' : '◀';
+                sidebarToggle.title = isOpen ? 'Cerrar menú' : 'Contraer panel';
+                sidebarToggle.setAttribute('aria-label', sidebarToggle.title);
+            }
+            if (isOpen && sidebarToggle) sidebarToggle.focus();
+        }
+
+        function closeMobileSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const backdrop = document.getElementById('sidebarBackdrop');
+            const menuButton = document.getElementById('mobileMenuToggle');
+            if (!sidebar || !backdrop || !menuButton) return;
+
+            sidebar.classList.remove('mobile-open');
+            backdrop.classList.remove('active');
+            menuButton.setAttribute('aria-expanded', 'false');
+            document.body.classList.remove('mobile-sidebar-open');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            if (sidebarToggle) {
+                sidebarToggle.textContent = '◀';
+                sidebarToggle.title = 'Contraer panel';
+                sidebarToggle.setAttribute('aria-label', sidebarToggle.title);
+            }
+            if (document.activeElement && sidebar.contains(document.activeElement)) menuButton.focus();
         }
 
         function toggleVacation(member, dateKey, event) {
@@ -4766,52 +4854,44 @@ function sortDailyProjects(projects) {
         function showVacationOptionsModal(member, startDateKey, dateKeysArray = []) {
             const currentYear = new Date().getFullYear();
             const previousYear = currentYear - 1;
+            const datesToAdd = [...new Set(dateKeysArray.length > 0 ? dateKeysArray : [startDateKey])].filter(Boolean);
+            const modal = document.getElementById('vacationOptionsModal');
+            const typeSelect = document.getElementById('vacationTypeSelect');
+            const selectionLabel = document.getElementById('vacationSelectionLabel');
+            if (!modal || !typeSelect || !selectionLabel || datesToAdd.length === 0) return;
 
-            const yearChoice = prompt(
-                `¿A qué año corresponden estas vacaciones?\n\n` +
-                `1 - Año actual (${currentYear})\n` +
-                `2 - Año anterior (${previousYear})\n` +
-                `3 - Willis Choice\n\n` +
-                `Introduce 1, 2 o 3:`
-            );
-
-            if (!yearChoice || !['1', '2', '3'].includes(yearChoice)) {
-                return;
-            }
-
-            const daysInput = prompt('¿Cuántos días quieres computar? (ej: 1, 0.5, etc.)', '1');
-
-            if (!daysInput) {
-                return;
-            }
-
-            const days = parseFloat(daysInput);
-            if (isNaN(days) || days <= 0) {
-                alert('Número de días inválido');
-                return;
-            }
-
-            let vacationType;
-            let vacationYear;
-
-            if (yearChoice === '1') {
-                vacationType = 'current_year';
-                vacationYear = currentYear;
-            } else if (yearChoice === '2') {
-                vacationType = 'previous_year';
-                vacationYear = previousYear;
-            } else {
-                vacationType = 'willis_choice';
-                vacationYear = currentYear;
-            }
-
-            // Si no hay fechas específicas, usar la del parámetro
-            const datesToAdd = dateKeysArray.length > 0 ? dateKeysArray : [startDateKey];
-
-            addVacationWithDateRange(member, datesToAdd, vacationType, vacationYear, days);
+            pendingVacationSelection = { member, dates: datesToAdd };
+            typeSelect.innerHTML = `
+                <option value="current_year">Año actual (${currentYear})</option>
+                <option value="previous_year">Año anterior (${previousYear})</option>
+                <option value="willis_choice">Willis Choice (${currentYear})</option>
+            `;
+            selectionLabel.textContent = `${datesToAdd.length} ${datesToAdd.length === 1 ? 'día completo' : 'días completos'}`;
+            modal.classList.add('active');
+            typeSelect.focus();
         }
 
-        async function addVacationWithDateRange(member, dateKeysArray, vacationType, vacationYear, days) {
+        function closeVacationOptionsModal() {
+            const modal = document.getElementById('vacationOptionsModal');
+            if (modal) modal.classList.remove('active');
+            pendingVacationSelection = null;
+        }
+
+        async function saveVacationSelection() {
+            if (!pendingVacationSelection) return;
+
+            const typeSelect = document.getElementById('vacationTypeSelect');
+            const vacationType = typeSelect && typeSelect.value;
+            if (!['current_year', 'previous_year', 'willis_choice'].includes(vacationType)) return;
+
+            const currentYear = new Date().getFullYear();
+            const vacationYear = vacationType === 'previous_year' ? currentYear - 1 : currentYear;
+            const selection = pendingVacationSelection;
+            closeVacationOptionsModal();
+            await addVacationWithDateRange(selection.member, selection.dates, vacationType, vacationYear);
+        }
+
+        async function addVacationWithDateRange(member, dateKeysArray, vacationType, vacationYear) {
             if (!dateKeysArray || dateKeysArray.length === 0) return;
 
             // Crear un registro independiente por cada día
@@ -4823,7 +4903,7 @@ function sortDailyProjects(projects) {
                 status: 'planned',
                 vacation_type: vacationType,
                 vacation_year: vacationYear,
-                days_count: days
+                days_count: 1
             }));
 
             const { error } = await supabaseClient
@@ -4840,30 +4920,6 @@ function sortDailyProjects(projects) {
             await loadTeamVacations();
             renderTeamView();
         }
-
-        async function addVacationWithDetails(member, dateKey, vacationType, vacationYear, days) {
-            const { error } = await supabaseClient
-                .from('team_vacations')
-                .insert({
-                    user_initials: member,
-                    start_date: dateKey,
-                    end_date: dateKey,
-                    status: 'planned',
-                    vacation_type: vacationType,
-                    vacation_year: vacationYear,
-                    days_count: days
-                });
-
-            if (error) {
-                console.error(error);
-                alert('Error añadiendo vacación');
-                return;
-            }
-
-            await loadTeamVacations();
-            renderTeamView();
-        }
-
 
         async function deleteVacation(vacationId) {
             const { error } = await supabaseClient
@@ -5310,4 +5366,13 @@ function sortDailyProjects(projects) {
         }
 
         window.addEventListener('load', setupLoginScreen);
-        window.addEventListener('resize', () => requestAnimationFrame(syncSidebarListHeights));
+        window.addEventListener('keydown', event => {
+            if (event.key === 'Escape') closeMobileSidebar();
+        });
+        window.addEventListener('resize', () => {
+            if (window.matchMedia('(max-width: 768px)').matches) {
+                document.getElementById('sidebar')?.classList.remove('collapsed');
+                closeMobileSidebar();
+            }
+            requestAnimationFrame(syncSidebarListHeights);
+        });
