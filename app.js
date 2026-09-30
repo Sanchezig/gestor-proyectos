@@ -456,6 +456,7 @@ async function updateIndicator(event, projectId, field, value) {
             fechaInicio: '',
             responsibles: []
         };
+        let dailyResponsibleDropdownOpen = false;
         let dailyEstadoDropdownOpen = false;
 
         function handleEstadoDropdownOutsideClick(e) {
@@ -1245,15 +1246,27 @@ function setDailyViewMode(mode) {
                 if (!allResponsibles.length) {
                     filterContainer.innerHTML = '';
                 } else {
-                    filterContainer.innerHTML =
-                        '<span class="daily-resp-label">Responsables</span>' +
-                        '<select class="daily-resp-select" onchange="onResponsiblesFilterChange(this)" multiple>' +
-                        '<option value="">Todos</option>' +
-                        allResponsibles.map(resp => {
-                            const selected = dailyFilters.responsibles.includes(resp) ? 'selected' : '';
-                            return `<option value="${resp}" ${selected}>${resp}</option>`;
-                        }).join('') +
-                        '</select>';
+                    const selectedCount = dailyFilters.responsibles.length;
+                    const selectedLabel = selectedCount > 0 ? `Responsables (${selectedCount})` : 'Responsables: todos';
+                    filterContainer.innerHTML = `
+                        <div class="daily-resp-filter">
+                            <button type="button" class="daily-resp-trigger${selectedCount ? ' is-filtered' : ''}"
+                                aria-expanded="${dailyResponsibleDropdownOpen}"
+                                aria-controls="dailyResponsibleOptions"
+                                onclick="toggleDailyResponsibleDropdown(event)">
+                                <span>${selectedLabel}</span><span class="daily-resp-chevron" aria-hidden="true">▾</span>
+                            </button>
+                            <div class="daily-resp-menu" id="dailyResponsibleOptions" ${dailyResponsibleDropdownOpen ? '' : 'hidden'} onclick="event.stopPropagation()">
+                                <div class="daily-resp-menu-header">
+                                    <span>Filtrar por responsable</span>
+                                    ${selectedCount ? '<button type="button" class="daily-resp-clear" onclick="clearDailyResponsibleFilter(event)">Limpiar</button>' : ''}
+                                </div>
+                                ${allResponsibles.map(resp => {
+                                    const checked = dailyFilters.responsibles.includes(resp) ? 'checked' : '';
+                                    return `<label class="daily-resp-option"><input type="checkbox" value="${escapeHtml(resp)}" ${checked} onchange="toggleDailyResponsibleFilter(this.value)"><span>${escapeHtml(resp)}</span></label>`;
+                                }).join('')}
+                            </div>
+                        </div>`;
                 }
             }
 
@@ -1505,16 +1518,36 @@ function setDailyViewMode(mode) {
             renderDaily();
         }
 
-        function onResponsiblesFilterChange(selectElement) {
-            // El select múltiple devuelve solo el último valor seleccionado
-            // Necesitamos obtener todos los valores del select
-            if (!selectElement) return;
-            const selected = Array.from(selectElement.options)
-                .filter(option => option.selected)
-                .map(option => option.value)
-                .filter(val => val !== ''); // Filtrar la opción vacía
-            
-            dailyFilters.responsibles = selected;
+        function toggleDailyResponsibleDropdown(event) {
+            event.stopPropagation();
+            dailyResponsibleDropdownOpen = !dailyResponsibleDropdownOpen;
+            if (dailyResponsibleDropdownOpen) {
+                document.addEventListener('click', closeDailyResponsibleDropdownOnOutsideClick);
+            } else {
+                document.removeEventListener('click', closeDailyResponsibleDropdownOnOutsideClick);
+            }
+            renderDaily();
+        }
+
+        function closeDailyResponsibleDropdownOnOutsideClick(event) {
+            const filter = document.querySelector('.daily-resp-filter');
+            if (filter && filter.contains(event.target)) return;
+            dailyResponsibleDropdownOpen = false;
+            document.removeEventListener('click', closeDailyResponsibleDropdownOnOutsideClick);
+            renderDaily();
+        }
+
+        function toggleDailyResponsibleFilter(responsible) {
+            const selected = dailyFilters.responsibles;
+            const index = selected.indexOf(responsible);
+            if (index === -1) selected.push(responsible);
+            else selected.splice(index, 1);
+            renderDaily();
+        }
+
+        function clearDailyResponsibleFilter(event) {
+            event.stopPropagation();
+            dailyFilters.responsibles = [];
             renderDaily();
         }
 
