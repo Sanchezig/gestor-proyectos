@@ -32,7 +32,7 @@ function handlePrereqClick(event, projectId, prereqName) {
 
     const normalizedUrl = normalizeDocumentationUrl(rawUrl);
     if (normalizedUrl === null) {
-        alert('URL inválida. Usa una URL http(s) válida.');
+        showToast('URL inválida. Usa una URL http(s) válida.', 'error');
         return;
     }
 
@@ -294,6 +294,122 @@ async function saveUserProfile(oldInitials, profile) {
 }
 
 // =====================================================
+// ================ FEEDBACK (TOASTS) ==================
+// Avisos no bloqueantes. type: info | success | warning | error
+// options.key permite reutilizar un mismo toast (p. ej. autoguardado)
+// =====================================================
+
+function showToast(message, type = 'info', options = {}) {
+    const { duration = (type === 'error' ? 5000 : 3200), key = null } = options;
+    const container = document.getElementById('toastContainer');
+    if (!container) {
+        if (type === 'error' || type === 'warning') window.alert(message);
+        return;
+    }
+
+    let toast = key ? container.querySelector(`.toast[data-key="${key}"]`) : null;
+    const isNew = !toast;
+    if (isNew) {
+        toast = document.createElement('div');
+        if (key) toast.dataset.key = key;
+        toast.addEventListener('click', () => dismissToast(toast));
+        container.appendChild(toast);
+    } else {
+        clearTimeout(Number(toast.dataset.timer));
+    }
+
+    toast.className = `toast toast--${type}${isNew ? '' : ' is-visible'}`;
+    toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+    toast.textContent = message;
+    if (isNew) requestAnimationFrame(() => toast.classList.add('is-visible'));
+    toast.dataset.timer = String(setTimeout(() => dismissToast(toast), duration));
+}
+
+function dismissToast(toast) {
+    if (!toast || !toast.isConnected) return;
+    clearTimeout(Number(toast.dataset.timer));
+    toast.classList.remove('is-visible');
+    setTimeout(() => toast.remove(), 220);
+}
+
+// =====================================================
+// ================= GESTIÓN DE MODALES ================
+// Apertura/cierre centralizados: foco inicial, devolución
+// del foco al cerrar, Escape y cierre por fondo (opcional).
+// =====================================================
+
+const MODAL_CLOSE_HANDLERS = {
+    dailyModal: () => closeDailyModal(),
+    commentsListModal: () => closeCommentsListModal(),
+    dayPersonalTasksModal: () => closeDayPersonalTasksModal(),
+    vacationOptionsModal: () => closeVacationOptionsModal(),
+    userSettingsModal: () => closeUserSettingsModal(),
+    projectModal: () => closeProjectModal()
+};
+const modalOpenerStack = [];
+
+function openModal(id, focusSelector = null) {
+    const modal = document.getElementById(id);
+    if (!modal) return;
+    if (!modal.classList.contains('active')) {
+        modalOpenerStack.push({ id, opener: document.activeElement });
+        modal.classList.add('active');
+    }
+    const target = (focusSelector && modal.querySelector(focusSelector)) || modal.querySelector('.modal-content');
+    setTimeout(() => {
+        // Instantánea tras rellenar el formulario (el llamante lo rellena justo después de openModal)
+        if (modal.hasAttribute('data-dirty-check')) modal.dataset.snapshot = getModalFormSnapshot(modal);
+        if (target) target.focus({ preventScroll: true });
+    }, 0);
+}
+
+function getModalFormSnapshot(modal) {
+    return Array.from(modal.querySelectorAll('input, select, textarea'))
+        .map(el => (el.type === 'checkbox' || el.type === 'radio') ? String(el.checked) : el.value)
+        .join('\u0001');
+}
+
+function isModalDirty(modal) {
+    if (!modal || !modal.hasAttribute('data-dirty-check')) return false;
+    return modal.dataset.snapshot !== undefined && modal.dataset.snapshot !== getModalFormSnapshot(modal);
+}
+
+function closeModal(id) {
+    const modal = document.getElementById(id);
+    if (!modal) return;
+    modal.classList.remove('active');
+    delete modal.dataset.snapshot;
+    if (modal.contains(document.activeElement)) document.activeElement.blur();
+    const idx = modalOpenerStack.map(entry => entry.id).lastIndexOf(id);
+    if (idx === -1) return;
+    const { opener } = modalOpenerStack.splice(idx, 1)[0];
+    const anotherOpen = document.querySelector('.modal.active');
+    if (!anotherOpen && opener && typeof opener.focus === 'function' && document.contains(opener) && opener !== document.body) {
+        setTimeout(() => opener.focus({ preventScroll: true }), 0);
+    }
+}
+
+function closeTopModal() {
+    const top = modalOpenerStack[modalOpenerStack.length - 1];
+    const fallback = document.querySelector('.modal.active');
+    const id = top ? top.id : (fallback ? fallback.id : null);
+    if (!id) return false;
+    if (isModalDirty(document.getElementById(id)) && !confirm('Tienes cambios sin guardar. ¿Descartarlos?')) return true;
+    const handler = MODAL_CLOSE_HANDLERS[id];
+    if (handler) handler(); else closeModal(id);
+    return true;
+}
+
+// Indicadores (prioridad, impacto, estado) operables con teclado
+function handleIndicatorKey(event, type) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    toggleIndicatorDropdown(event, type);
+    const firstOption = document.querySelector(`#dropdown-${type} .indicator-option`);
+    if (firstOption) firstOption.focus();
+}
+
+// =====================================================
 // =============== FUNCIONES COMPARTIDAS ===============
 // (utilidades, helpers, actualización de campos, etc.)
 // =====================================================
@@ -315,6 +431,21 @@ function escapeHtml(text) {
     return String(text).replace(/[&<>"']/g, char => map[char]);
 }
 
+// Activa el elemento (click) con Enter o Espacio: para th/div/span que actúan como botón
+function activateOnEnterOrSpace(event) {
+    if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        event.currentTarget.click();
+    }
+}
+
+function renderSortableHeader(column, label, sortState, toggleFnName) {
+    const isSorted = sortState.column === column;
+    const indicator = isSorted ? (sortState.direction === 'asc' ? '▲' : '▼') : '';
+    const ariaSort = isSorted ? (sortState.direction === 'asc' ? 'ascending' : 'descending') : 'none';
+    return `<th class="sortable-header" tabindex="0" aria-sort="${ariaSort}" title="Ordenar por ${escapeHtml(label)}" onclick="${toggleFnName}('${column}')" onkeydown="activateOnEnterOrSpace(event)">${label} <span class="sort-indicator" aria-hidden="true">${indicator}</span></th>`;
+}
+
 function formatSupabaseError(error, fallbackMessage) {
     if (!error) return fallbackMessage || 'Error desconocido';
 
@@ -334,6 +465,17 @@ function getStatusIcon(status) {
         case 'Rojo': return '🚫';
         default: return '✅';
     }
+}
+
+function renderPhaseOptions(selectedPhase) {
+    return PROJECT_PHASES.map(phase =>
+        `<option value="${phase}" ${phase === selectedPhase ? 'selected' : ''}>${phase}</option>`
+    ).join('');
+}
+
+function syncPhaseSelectors() {
+    const select = document.getElementById('projectPhase');
+    if (select) select.innerHTML = renderPhaseOptions(PROJECT_PHASES[0]);
 }
 
 function getStatusText(status) {
@@ -556,12 +698,17 @@ function setDashboardFilter(field, value) {
 // (tabla semanal, filtros, comentarios diarios, etc.)
 // =====================================================
 
-function setDailyViewMode(mode) {
-    dailyViewMode = mode;
-    document.getElementById('btnDailyActivos').classList.toggle('active', mode === 'activos');
-    document.getElementById('btnDailyCompletados').classList.toggle('active', mode === 'completados');
-    renderDaily();
-}
+        function setDailyViewMode(mode) {
+            dailyViewMode = mode;
+            [['btnDailyActivos', 'activos'], ['btnDailyCompletados', 'completados']].forEach(([id, value]) => {
+                const btn = document.getElementById(id);
+                if (!btn) return;
+                const isActive = mode === value;
+                btn.classList.toggle('active', isActive);
+                btn.setAttribute('aria-pressed', String(isActive));
+            });
+            renderDaily();
+        }
 
 
         function getMonday(date) {
@@ -607,13 +754,11 @@ function setDailyViewMode(mode) {
         }
 
         function openNewProjectModal() {
-            document.getElementById('projectModal').classList.add('active');
+            openModal('projectModal', '#projectName');
         }
 
         function closeProjectModal() {
-            // Cerrar modal
-            const modal = document.getElementById('projectModal');
-            if (modal) modal.classList.remove('active');
+            closeModal('projectModal');
 
             // Limpiar campos de forma SEGURA (solo si existen)
             const fields = ['projectName', 'projectStartDate', 'projectEndDate', 'volume', 'fte', 'projectStakeholders', 'projectPhase'];
@@ -637,7 +782,7 @@ function setDailyViewMode(mode) {
             const available = teamMembers.filter(m => !current.includes(m));
             
             if (available.length === 0) {
-                alert('Todos los responsables ya están asignados');
+                showToast('Todos los responsables ya están asignados', 'info');
                 return;
             }
             
@@ -649,21 +794,26 @@ function setDailyViewMode(mode) {
             const popover = document.createElement('div');
             popover.id = popoverId;
             popover.className = 'resp-popover';
+            popover.setAttribute('role', 'dialog');
+            popover.setAttribute('aria-label', 'Agregar responsable');
             popover.innerHTML = `
                 <div class="resp-popover-content">
                     <div class="resp-popover-title">Agregar responsable</div>
                     <div class="resp-popover-buttons">
                         ${available.map(resp => `
-                            <button class="resp-popover-btn" onclick="addResponsibleAndClose('${projectId}', '${resp}')">
+                            <button type="button" class="resp-popover-btn" onclick="addResponsibleAndClose('${projectId}', '${resp}')">
                                 ${resp}
                             </button>
                         `).join('')}
                     </div>
-                    <button class="resp-popover-close" onclick="closeResponsiblesPopover('${projectId}')">✕</button>
+                    <button type="button" class="resp-popover-close" aria-label="Cerrar" onclick="closeResponsiblesPopover('${projectId}')">✕</button>
                 </div>
             `;
             
             document.body.appendChild(popover);
+            setTimeout(() => document.addEventListener('click', handleResponsiblesPopoverOutsideClick), 0);
+            const firstOption = popover.querySelector('.resp-popover-btn');
+            if (firstOption) firstOption.focus();
 
             const anchor = document.querySelector(`.resp-btn-header[data-project-id="${projectId}"]`);
             if (!anchor) return;
@@ -696,8 +846,21 @@ function setDailyViewMode(mode) {
         }
 
         function closeResponsiblesPopover(projectId) {
-            const popover = document.getElementById(`resp-popover-${projectId}`);
-            if (popover) popover.remove();
+            const popovers = projectId
+                ? [document.getElementById(`resp-popover-${projectId}`)]
+                : Array.from(document.querySelectorAll('.resp-popover'));
+            popovers.forEach(el => el && el.remove());
+            document.removeEventListener('click', handleResponsiblesPopoverOutsideClick);
+        }
+
+        function handleResponsiblesPopoverOutsideClick(event) {
+            const popover = document.querySelector('.resp-popover');
+            if (!popover) {
+                document.removeEventListener('click', handleResponsiblesPopoverOutsideClick);
+                return;
+            }
+            if (popover.contains(event.target) || (event.target.closest && event.target.closest('.resp-btn-header'))) return;
+            closeResponsiblesPopover();
         }
 
         function removeResponsible(projectId, responsible) {
@@ -727,7 +890,8 @@ function setDailyViewMode(mode) {
             // VALIDAR NOMBRE
             const name = nameInput.value.trim();
             if (!name) {
-                alert('Por favor, ingresa el nombre del proyecto.');
+                showToast('Indica el nombre del proyecto.', 'warning');
+                nameInput.focus();
                 return;
             }
 
@@ -772,7 +936,7 @@ function setDailyViewMode(mode) {
 
             if (error) {
                 console.error("❌ Error:", error);
-                alert("Error guardando proyecto: " + error.message);
+                showToast("Error guardando proyecto: " + error.message, 'error');
                 return;
             }
 
@@ -787,17 +951,18 @@ function setDailyViewMode(mode) {
             stakeholdersInput.value = '';
             phaseInput.value = 'Idea'; // Resetear al valor por defecto
 
-            // RECARGAR DATOS Y ABRIR FICHA
-            await loadDataFromSupabase();
+            // CERRAR MODAL, RECARGAR DATOS Y ABRIR LA FICHA DEL NUEVO PROYECTO
+            closeProjectModal();
+            await loadDataFromSupabase(true);
 
             if (data && data.id) {
                 currentProjectId = data.id;
+                renderProjectsList();
                 switchView('ficha');
-                renderFicha();
+            } else {
+                renderActiveView();
             }
-
-            // CERRAR MODAL
-            closeProjectModal();
+            showToast('Proyecto creado', 'success');
         }
 
 
@@ -831,7 +996,7 @@ function setDailyViewMode(mode) {
                 if (project.phase !== 'Cerrado') {
                     const li = document.createElement('li');
                     const isActive = currentProjectId === project.id ? 'active' : '';
-                    li.innerHTML = `<button onclick="selectProject('${project.id}')" class="${isActive}">${escapeHtml(project.name)}</button>`;
+                    li.innerHTML = `<button type="button" onclick="selectProject('${project.id}')" class="${isActive}"${isActive ? ' aria-current="true"' : ''}>${escapeHtml(project.name)}</button>`;
                     listActive.appendChild(li);
                 }
             });
@@ -844,13 +1009,15 @@ function setDailyViewMode(mode) {
                 if (project.phase === 'Cerrado') {
                     const li = document.createElement('li');
                     const isActive = currentProjectId === project.id ? 'active' : '';
-                    li.innerHTML = `<button onclick="selectProject('${project.id}')" class="${isActive}">${escapeHtml(project.name)}</button>`;
+                    li.innerHTML = `<button type="button" onclick="selectProject('${project.id}')" class="${isActive}"${isActive ? ' aria-current="true"' : ''}>${escapeHtml(project.name)}</button>`;
                     listCompleted.appendChild(li);
                 }
             });
 
             const select = document.getElementById('commentProjectSelect');
             if (select) {
+                // Conservar la selección: un refresco en tiempo real no debe vaciar el modal abierto
+                const previousSelection = select.value;
                 select.innerHTML = '<option value="">Selecciona un proyecto...</option>';
                 projects.forEach(p => {
                     const opt = document.createElement('option');
@@ -858,6 +1025,7 @@ function setDailyViewMode(mode) {
                     opt.textContent = p.name;
                     select.appendChild(opt);
                 });
+                if (previousSelection && projects.some(p => p.id === previousSelection)) select.value = previousSelection;
             }
 
             requestAnimationFrame(syncSidebarListHeights);
@@ -865,45 +1033,27 @@ function setDailyViewMode(mode) {
 
         function toggleSidebarSection(section) {
             sidebarCollapsed[section] = !sidebarCollapsed[section];
-            
-            // Actualizar ícono con el atributo data-collapsed
-            const titles = document.querySelectorAll('.sidebar-title');
-            const titleIndex = section === 'activos' ? 0 : 1;
-            if (titles[titleIndex]) {
-                const icon = titles[titleIndex].querySelector('.section-toggle-icon');
-                if (icon) {
-                    icon.setAttribute('data-collapsed', sidebarCollapsed[section] ? 'true' : 'false');
-                }
+            const title = document.getElementById(section === 'activos' ? 'sidebarTitleActivos' : 'sidebarTitleCompletados');
+            if (title) {
+                title.setAttribute('aria-expanded', String(!sidebarCollapsed[section]));
+                const icon = title.querySelector('.section-toggle-icon');
+                if (icon) icon.setAttribute('data-collapsed', sidebarCollapsed[section] ? 'true' : 'false');
             }
-            
             renderProjectsList();
         }
 
         function selectProject(projectId) {
             closeMobileSidebar();
             currentProjectId = projectId;
-
-            // Detectar si el proyecto seleccionado es completado
-            const selectedProject = projects.find(p => p.id === projectId);
-            if (selectedProject) {
-                // Si está en vista Daily, cambiar automáticamente el modo según el estado del proyecto
-                const isDailyView = document.querySelector('.daily-view.active');
-                if (isDailyView) {
-                    if (selectedProject.phase === 'Cerrado') {
-                        setDailyViewMode('completados');
-                    } else {
-                        setDailyViewMode('activos');
-                    }
-                }
-            }
-
             renderProjectsList();
 
-            const currentView = document.querySelector('.daily-view.active') ? 'daily' : 'ficha';
-            if (currentView === 'ficha') {
-                renderFicha();
+            if (currentView === 'daily') {
+                // En Daily, mostrar el modo acorde al proyecto y resaltar su fila
+                const selectedProject = projects.find(p => p.id === projectId);
+                setDailyViewMode(selectedProject && selectedProject.phase === 'Cerrado' ? 'completados' : 'activos');
             } else {
-                renderDaily();
+                // Desde cualquier otra vista, abrir la ficha del proyecto
+                switchView('ficha');
             }
         }
 
@@ -1045,13 +1195,11 @@ function setDailyViewMode(mode) {
             }
             dayPersonalTasksModalContext.dateKey = dateKey;
             renderDayPersonalTasksModal();
-            const modal = document.getElementById('dayPersonalTasksModal');
-            if (modal) modal.classList.add('active');
+            openModal('dayPersonalTasksModal', '#dayPersonalTaskInput');
         }
 
         function closeDayPersonalTasksModal() {
-            const modal = document.getElementById('dayPersonalTasksModal');
-            if (modal) modal.classList.remove('active');
+            closeModal('dayPersonalTasksModal');
             const input = document.getElementById('dayPersonalTaskInput');
             if (input) input.value = '';
         }
@@ -1086,7 +1234,7 @@ function setDailyViewMode(mode) {
                 });
 
             if (!tasks.length) {
-                listEl.innerHTML = '<div class="empty-state" style="padding:8px 0;">No hay tareas personales para este dia.</div>';
+                listEl.innerHTML = '<div class="empty-state empty-state--compact">No hay tareas personales para este dia.</div>';
                 return;
             }
 
@@ -1098,7 +1246,7 @@ function setDailyViewMode(mode) {
                         <input type="checkbox" ${task.completed ? 'checked' : ''} onchange="toggleDayPersonalTask('${task.id}', this.checked)">
                         <span>${escapeHtml(task.text)}</span>
                     </label>
-                    <button class="day-personal-delete" onclick="deleteDayPersonalTask('${task.id}')" title="Borrar">×</button>
+                    <button type="button" class="day-personal-delete" onclick="deleteDayPersonalTask('${task.id}')" title="Borrar tarea" aria-label="Borrar tarea: ${escapeHtml(task.text)}">×</button>
                 </div>`;
             });
             html += '</div>';
@@ -1129,14 +1277,14 @@ function setDailyViewMode(mode) {
 
             if (error) {
                 console.error(error);
-                alert('Error guardando tarea personal del dia');
+                showToast('Error guardando tarea personal del dia', 'error');
                 return;
             }
 
             input.value = '';
             await loadDayPersonalTasks();
             renderDayPersonalTasksModal();
-            renderDaily();
+            renderActiveView();
         }
 
         async function toggleDayPersonalTask(taskId, done) {
@@ -1149,13 +1297,13 @@ function setDailyViewMode(mode) {
 
             if (error) {
                 console.error(error);
-                alert('Error actualizando tarea personal del dia');
+                showToast('Error actualizando tarea personal del dia', 'error');
                 return;
             }
 
             await loadDayPersonalTasks();
             renderDayPersonalTasksModal();
-            renderDaily();
+            renderActiveView();
         }
 
         async function deleteDayPersonalTask(taskId) {
@@ -1171,13 +1319,13 @@ function setDailyViewMode(mode) {
 
             if (error) {
                 console.error(error);
-                alert('Error borrando tarea personal del dia');
+                showToast('Error borrando tarea personal del dia', 'error');
                 return;
             }
 
             await loadDayPersonalTasks();
             renderDayPersonalTasksModal();
-            renderDaily();
+            renderActiveView();
         }
 
         function renderDaily() {
@@ -1191,6 +1339,7 @@ function setDailyViewMode(mode) {
 
             updateWeekInfo();
             const weekDates = getWeekDates(currentWeekStart);
+            const todayKey = formatDateKey(new Date());
 
             const estadosUnicos = Array.from(
                 new Set(projects.map(p => p.phase || 'Sin fase'))
@@ -1273,11 +1422,14 @@ function setDailyViewMode(mode) {
             let html = '<table class="daily-table"><thead>';
 
             const tituloTabla = dailyViewMode === 'activos' ? 'Proyecto (activos)' : 'Proyecto (completados)';
-            html += `<tr><th onclick="toggleDailySort('name')" class="sortable-header">${tituloTabla} ${getSortIndicatorDaily('name')}</th><th onclick="toggleDailySort('status')" class="sortable-header">Estado ${getSortIndicatorDaily('status')}</th><th onclick="toggleDailySort('startDate')" class="sortable-header">Fecha inicio ${getSortIndicatorDaily('startDate')}</th>`;
+            html += '<tr>' +
+                renderSortableHeader('name', tituloTabla, dailySort, 'toggleDailySort') +
+                renderSortableHeader('status', 'Estado', dailySort, 'toggleDailySort') +
+                renderSortableHeader('startDate', 'Fecha inicio', dailySort, 'toggleDailySort');
 
             weekDates.forEach((date) => {
-                const dateKey = date.toISOString().slice(0, 10);
-                const isToday = dateKey === new Date().toISOString().slice(0, 10);
+                const dateKey = formatDateKey(date);
+                const isToday = dateKey === todayKey;
                 const isHoliday = madridHolidays.has(dateKey);
 
                 const dayNameRaw = date.toLocaleDateString('es-ES', { weekday: 'long' });
@@ -1292,12 +1444,12 @@ function setDailyViewMode(mode) {
                     headerClass += ' holiday-header';
                 }
 
-                const holidayBadge = isHoliday ? '<span style="position:absolute;top:4px;right:6px;font-size:9px;color:#d32f2f;font-weight:700;">FESTIVO</span>' : '';
+                const holidayBadge = isHoliday ? '<span class="holiday-badge">FESTIVO</span>' : '';
                 const dayTaskBtnClass = getDayHeaderButtonClass(dateKey);
                 const dayTaskBtnTitle = escapeHtml(getDayHeaderButtonTitle(dateKey));
-                const dayTaskBtn = `<button class="day-header-task-btn ${dayTaskBtnClass}" title="${dayTaskBtnTitle}" onclick="openDayPersonalTasksModal(event, '${dateKey}')">+</button>`;
+                const dayTaskBtn = `<button type="button" class="day-header-task-btn ${dayTaskBtnClass}" title="${dayTaskBtnTitle}" aria-label="${dayTaskBtnTitle} (${dayName} ${dateStr})" onclick="openDayPersonalTasksModal(event, '${dateKey}')">+</button>`;
 
-                html += `<th class="${headerClass}" style="position:relative;">${holidayBadge}${dayTaskBtn}${dayName}<br>${dateStr}</th>`;
+                html += `<th class="${headerClass}"${isToday ? ' aria-current="date"' : ''}>${holidayBadge}${dayTaskBtn}${dayName}<br>${dateStr}</th>`;
             });
 
             html += '</tr>';
@@ -1305,8 +1457,8 @@ function setDailyViewMode(mode) {
             // FILA DE FILTROS (Se dibuja siempre)
             html += '<tr class="filter-row">';
 
-            html += '<th><input class="filter-input" type="text" placeholder="Filtrar..." ' +
-                'value="' + dailyFilters.proyecto + '" ' +
+            html += '<th><input class="filter-input" type="text" placeholder="Filtrar..." aria-label="Filtrar por nombre de proyecto" ' +
+                'value="' + escapeHtml(dailyFilters.proyecto) + '" ' +
                 'oninput="onFilterChange(\'proyecto\', this.value)"></th>';
 
             {
@@ -1315,7 +1467,7 @@ function setDailyViewMode(mode) {
                 const btnLabel = selCount === 0 ? 'Todos' : selCount === 1 ? dailyFilters.estados[0] : selCount + ' estados';
                 const hasActive = selCount > 0 ? ' active' : '';
                 let estadoHtml = `<div class="estado-filter-wrapper">
-  <button class="estado-filter-btn${hasActive}" onclick="event.stopPropagation();toggleDailyEstadoDropdown()">${btnLabel} <span class="estado-arrow">&#9660;</span></button>`;
+  <button type="button" class="estado-filter-btn${hasActive}" aria-haspopup="true" aria-expanded="${dailyEstadoDropdownOpen}" aria-label="Filtrar por estado: ${escapeHtml(btnLabel)}" onclick="event.stopPropagation();toggleDailyEstadoDropdown()">${btnLabel} <span class="estado-arrow">&#9660;</span></button>`;
                 if (dailyEstadoDropdownOpen) {
                     const jsonEstados = JSON.stringify(estadosUnicos).replace(/"/g, '&quot;');
                     estadoHtml += `<div class="estado-filter-dropdown" onclick="event.stopPropagation()">
@@ -1326,15 +1478,15 @@ function setDailyViewMode(mode) {
   <div class="estado-filter-separator"></div>`;
                     estadosUnicos.forEach(est => {
                         const chk = dailyFilters.estados.includes(est) ? 'checked' : '';
-                        estadoHtml += `<label class="estado-filter-option"><input type="checkbox" ${chk} data-estado="${escapeHtml(est)}" onchange="toggleDailyEstadoFilter(this.dataset.estado)"><span>${est}</span></label>`;
+                        estadoHtml += `<label class="estado-filter-option"><input type="checkbox" ${chk} data-estado="${escapeHtml(est)}" onchange="toggleDailyEstadoFilter(this.dataset.estado)"><span>${escapeHtml(est)}</span></label>`;
                     });
                     estadoHtml += '</div>';
                 }
                 estadoHtml += '</div>';
-                html += '<th style="position:relative;overflow:visible;">' + estadoHtml + '</th>';
+                html += '<th class="filter-cell filter-cell--dropdown">' + estadoHtml + '</th>';
             }
 
-            html += '<th><input class="filter-input" type="date" ' +
+            html += '<th><input class="filter-input" type="date" aria-label="Fecha de inicio desde" ' +
                 'value="' + dailyFilters.fechaInicio + '" ' +
                 'oninput="onFilterChange(\'fechaInicio\', this.value || \'\')"></th>'; // <--- OJO: Asegúrate de manejar el string vacío
 
@@ -1349,7 +1501,7 @@ function setDailyViewMode(mode) {
                     `<span class="vacation-badge">${user}</span>`
                 ).join('');
 
-                html += `<th style="padding: 3px 2px;">${vacationBadges}</th>`;
+                html += `<th class="vacation-badges-cell">${vacationBadges}</th>`;
             });
 
             html += `</tr>`;
@@ -1360,7 +1512,7 @@ function setDailyViewMode(mode) {
                 // Calculamos colspan: 3 columnas fijas + 5 días de la semana = 8
                 const label = dailyViewMode === 'activos' ? 'activos' : 'completados';
                 html += `<tr>
-                        <td colspan="8" style="text-align: center; padding: 20px; color: #666;">
+                        <td colspan="8" class="table-empty">
                             No hay proyectos ${label} que cumplan los filtros seleccionados.
                         </td>
                      </tr>`;
@@ -1372,25 +1524,18 @@ function setDailyViewMode(mode) {
                 sortedProjects.forEach(project => {
                     const selectedClass = project.id === currentProjectId ? 'selected-row' : '';
                     html += `<tr class="${selectedClass}" onclick="onRowClick('${project.id}')">
-                    <td class="project-name-cell" onclick="onProjectNameClick(event, '${project.id}')">${escapeHtml(project.name)}</td>
+                    <td class="project-name-cell"><button type="button" class="project-name-link" title="Abrir ficha del proyecto" onclick="onProjectNameClick(event, '${project.id}')">${escapeHtml(project.name)}</button></td>
                     <td>
-                        <select class="state-select"
+                        <select class="state-select" aria-label="Fase de ${escapeHtml(project.name)}"
                                 onclick="event.stopPropagation()"
                                 onchange="updateProjectPhaseFromDaily(event, '${project.id}')">
-                            <option value="Idea" ${project.phase === 'Idea' ? 'selected' : ''}>Idea</option>
-                            <option value="En Progreso" ${project.phase === 'En Progreso' ? 'selected' : ''}>En Progreso</option>
-                            <option value="On Hold" ${project.phase === 'On Hold' ? 'selected' : ''}>On Hold</option>
-                            <option value="Mantenimiento" ${project.phase === 'Mantenimiento' ? 'selected' : ''}>Mantenimiento</option>
-                            <option value="Hypercare" ${project.phase === 'Hypercare' ? 'selected' : ''}>Hypercare</option>
-                            <option value="Cerrado" ${project.phase === 'Cerrado' ? 'selected' : ''}>Cerrado</option>
+                            ${renderPhaseOptions(project.phase)}
                         </select>
                     </td>
                     <td>${formatDateDisplay(project.startDate)}</td>`;
 
                     weekDates.forEach((date) => {
-                        const dayNum = String(date.getDate()).padStart(2, '0');
-                        const monthNum = String(date.getMonth() + 1).padStart(2, '0');
-                        const dateKey = `${date.getFullYear()}-${monthNum}-${dayNum}`;
+                        const dateKey = formatDateKey(date);
 
                         const cellComments = getVisibleCommentsByProjectDate(project.id, dateKey);
                         const topLevelComments = cellComments.filter(c => !c.parentId);
@@ -1401,7 +1546,7 @@ function setDailyViewMode(mode) {
                         const hasTeamPending = pendingTeam > 0;
                         const hasPersonalPending = pendingPersonal > 0;
                         const isHoliday = madridHolidays.has(dateKey);
-                        const isToday = dateKey === new Date().toISOString().slice(0, 10);
+                        const isToday = dateKey === todayKey;
                         let highlightClass = '';
                         if (hasTeamPending && hasPersonalPending) {
                             highlightClass = ' has-comment-mixed';
@@ -1430,8 +1575,8 @@ function setDailyViewMode(mode) {
                             <div class="daily-cell-preview">${previewText}</div>
                             ${metaText ? `<div class="daily-cell-meta">${metaText}</div>` : ''}
                             <div class="daily-actions">
-                                ${topLevelComments.length > 0 ? `<button class="daily-action-btn" onclick="openCommentsList(event, '${project.id}', '${dateKey}')">Ver</button>` : ''}
-                                <button class="daily-action-btn" onclick="openDailyCommentModalFromCell(event, '${project.id}', '${dateKey}')">+</button>
+                                ${topLevelComments.length > 0 ? `<button type="button" class="daily-action-btn" title="Ver comentarios" aria-label="Ver comentarios de ${escapeHtml(project.name)} el ${dateKey}" onclick="openCommentsList(event, '${project.id}', '${dateKey}')">Ver</button>` : ''}
+                                <button type="button" class="daily-action-btn daily-action-btn--add" title="Añadir comentario" aria-label="Añadir comentario a ${escapeHtml(project.name)} el ${dateKey}" onclick="openDailyCommentModalFromCell(event, '${project.id}', '${dateKey}')">+</button>
                             </div>
                         </div>
                     </td>`;
@@ -1552,33 +1697,12 @@ function setDailyViewMode(mode) {
         }
 
 
-       async function updateProjectPhaseFromDaily(event, projectId) {
-    event.stopPropagation();
-    const newPhase = event.target.value;
-    
-    // 1. Actualizar en memoria local
-    const project = projects.find(p => p.id === projectId);
-    if (project) {
-        project.phase = newPhase;
-    }
-    
-    // 2. Guardar en base de datos PRIMERO
-    await updateProjectField(projectId, "phase", newPhase);
-    
-    // 3. Cambiar vista según el nuevo estado
-    if (newPhase === "Cerrado") {
-        dailyViewMode = "completados";
-        document.getElementById("btnDailyActivos").classList.remove("active");
-        document.getElementById("btnDailyCompletados").classList.add("active");
-    } else {
-        dailyViewMode = "activos";
-        document.getElementById("btnDailyActivos").classList.add("active");
-        document.getElementById("btnDailyCompletados").classList.remove("active");
-    }
-    
-    // 4. Refrescar la vista DESPUÉS de guardar
-    renderDaily();
-}
+        async function updateProjectPhaseFromDaily(event, projectId) {
+            event.stopPropagation();
+            const newPhase = event.target.value;
+            await updateProjectField(projectId, 'phase', newPhase);
+            setDailyViewMode(newPhase === 'Cerrado' ? 'completados' : 'activos');
+        }
 
 
 
@@ -1591,7 +1715,7 @@ function setDailyViewMode(mode) {
         }
 
         function openDailyCommentModal(dateKey, projectIdOverride = null) {
-            document.getElementById('dailyModal').classList.add('active');
+            openModal('dailyModal', '#commentText');
             document.getElementById('dailyModalTitle').textContent = editingCommentId ? 'Editar comentario Daily' : 'Nuevo comentario Daily';
 
             syncTeamMembersInSelectors();
@@ -1649,7 +1773,7 @@ function setDailyViewMode(mode) {
         }
 
         function closeDailyModal() {
-            document.getElementById('dailyModal').classList.remove('active');
+            closeModal('dailyModal');
             document.getElementById('commentText').value = '';
             document.getElementById('commentResponsible').value = '';
             document.getElementById('commentUrgency').value = 'Normal';
@@ -1660,8 +1784,6 @@ function setDailyViewMode(mode) {
             editingCommentId = null;
         }
 
-        function updateAvailableTasks() {
-        }
 
         async function saveDailyComment() {
             const projectId = document.getElementById('commentProjectSelect').value;
@@ -1677,7 +1799,7 @@ function setDailyViewMode(mode) {
             // console.log('Guardando comentario...', { projectId, text, editingCommentId });
 
             if (!projectId || !text) {
-                alert('Por favor, completa los campos obligatorios.');
+                showToast('Por favor, completa los campos obligatorios.', 'warning');
                 return;
             }
 
@@ -1712,13 +1834,13 @@ function setDailyViewMode(mode) {
 
                 if (error) {
                     console.error(error);
-                    alert('Error actualizando comentario');
+                    showToast('Error actualizando comentario', 'error');
                     return;
                 }
 
                 if (!data || data.length === 0) {
                     console.error('UPDATE no afectó ninguna fila');
-                    alert('No se encontró el comentario para actualizar');
+                    showToast('No se encontró el comentario para actualizar', 'error');
                     return;
                 }
             } else {
@@ -1742,25 +1864,23 @@ function setDailyViewMode(mode) {
 
                 if (error) {
                     console.error(error);
-                    alert('Error guardando comentario');
+                    showToast('Error guardando comentario', 'error');
                     return;
                 }
             }
 
             if (urgency === 'Máxima') {
-                alert(`⚠️ URGENCIA MÁXIMA\nEnviando notificación a: ${responsible || 'responsable no especificado'}`);
+                showToast(`Comentario guardado con urgencia máxima${responsible ? ` para ${responsible}` : ''}`, 'warning');
+            } else {
+                showToast(wasEditing ? 'Comentario actualizado' : 'Comentario guardado', 'success');
             }
 
             closeDailyModal();
-
-            // console.log('Recargando datos... wasEditing:', wasEditing);
             await loadDataFromSupabase(true);
+            renderActiveView();
 
             if (wasEditing) {
-                // console.log('Reabriendo lista de comentarios para:', savedProjectId, savedDateKey);
                 openCommentsList(new Event('click'), savedProjectId, savedDateKey);
-            } else {
-                renderFicha();
             }
         }
 
@@ -1773,7 +1893,7 @@ function setDailyViewMode(mode) {
             commentsListContext.projectId = projectId;
             commentsListContext.dateKey = dateKey;
             renderCommentsListContent(projectId, dateKey);
-            document.getElementById('commentsListModal').classList.add('active');
+            openModal('commentsListModal');
         }
 
         function formatDateTimeEuropeMadrid(dateInput, fallbackDateKey = '', fallbackTime = '') {
@@ -1845,7 +1965,7 @@ function setDailyViewMode(mode) {
 
             const container = document.getElementById('commentsListContainer');
             if (topLevel.length === 0) {
-                container.innerHTML = '<div class="empty-state" style="padding: 12px;">Sin comentarios para este día.</div>';
+                container.innerHTML = '<div class="empty-state empty-state--compact">Sin comentarios para este día.</div>';
                 return;
             }
 
@@ -1864,38 +1984,39 @@ function setDailyViewMode(mode) {
 
                 const completedClass = c.completed ? 'completed' : '';
                 const completedBadge = c.completed ? '<span class="completion-badge">✓ COMPLETADA</span>' : '';
-                const personalBadge = c.isPersonal ? '<span class="completion-badge" style="background:#e4fff1;border-color:#8bc7a1;color:#17663a;">PRIVADA</span>' : '';
+                const personalBadge = c.isPersonal ? '<span class="completion-badge completion-badge--private">PRIVADA</span>' : '';
 
                 html += `<div class="comment-entry ${completedClass}">
                 <div class="comment-checkbox-wrapper">
                     <input type="checkbox" class="comment-checkbox"
                            ${c.completed ? 'checked' : ''}
+                           aria-label="Marcar como completado"
                            onclick="toggleCommentCompletion(event, '${c.id}')">
-                    <div style="flex: 1;">
+                    <div class="comment-main">
                         <div class="comment-header">${formattedDate} [${escapeHtml(c.userName || "ND")}]${completedBadge}${personalBadge}</div>
                         <div class="comment-meta">Resp: [${escapeHtml(c.responsible || 'ND')}]</div>
                         <div class="comment-text">${escapeHtml(c.text).replace(/\n/g, '<br>')}</div>
                     </div>
                 </div>
                 <div class="comment-actions">
-                    <button class="comment-action-btn comment-reply-btn" onclick="toggleReplyForm('${c.id}')">↩ Responder</button>
-                    <button class="comment-action-btn" onclick="editComment('${c.id}')">✏️ Editar</button>
-                    <button class="comment-action-btn" onclick="deleteComment('${c.id}')">🗑️ Borrar</button>
+                    <button type="button" class="comment-action-btn comment-reply-btn" onclick="toggleReplyForm('${c.id}')">↩ Responder</button>
+                    <button type="button" class="comment-action-btn" onclick="editComment('${c.id}')">✏️ Editar</button>
+                    <button type="button" class="comment-action-btn comment-action-btn--danger" onclick="deleteComment('${c.id}')">🗑️ Borrar</button>
                 </div>`;
 
                 if (hasReplies) {
                     html += `<div class="comment-thread-footer">
-                    <button class="comment-action-btn comment-thread-btn" onclick="toggleCommentThread('${c.id}')">💬 ${replies.length} ${replies.length === 1 ? 'respuesta' : 'respuestas'} ${isExpanded ? '▲' : '▼'}</button>
+                    <button type="button" class="comment-action-btn comment-thread-btn" aria-expanded="${isExpanded}" onclick="toggleCommentThread('${c.id}')">💬 ${replies.length} ${replies.length === 1 ? 'respuesta' : 'respuestas'} ${isExpanded ? '▲' : '▼'}</button>
                 </div>`;
                 }
 
                 if (isReplying) {
                     html += `<div class="reply-form">
-                    <textarea class="reply-textarea" id="replyText_${c.id}" placeholder="Escribe tu respuesta..." rows="2"></textarea>
+                    <textarea class="reply-textarea" aria-label="Respuesta" id="replyText_${c.id}" placeholder="Escribe tu respuesta..." rows="2"></textarea>
                     <div class="reply-form-actions">
-                        <button class="comment-action-btn btn-reply-send" onclick="saveCommentReply('${c.id}', '${projectId}', '${dateKey}')">Enviar</button>
-                        <button class="comment-action-btn btn-reply-send-mail" onclick="saveCommentReply('${c.id}', '${projectId}', '${dateKey}', true)">Enviar y mail</button>
-                        <button class="comment-action-btn" onclick="cancelReplyForm()">Cancelar</button>
+                        <button type="button" class="comment-action-btn btn-reply-send" onclick="saveCommentReply('${c.id}', '${projectId}', '${dateKey}')">Enviar</button>
+                        <button type="button" class="comment-action-btn btn-reply-send-mail" onclick="saveCommentReply('${c.id}', '${projectId}', '${dateKey}', true)">Enviar y mail</button>
+                        <button type="button" class="comment-action-btn" onclick="cancelReplyForm()">Cancelar</button>
                     </div>
                 </div>`;
                 }
@@ -1911,7 +2032,7 @@ function setDailyViewMode(mode) {
                         <div class="reply-body">
                             <div class="reply-header">${rDate} ${rTime} · <strong>${escapeHtml(r.userName || 'ND')}</strong></div>
                             <div class="reply-text">${escapeHtml(r.text).replace(/\n/g, '<br>')}</div>
-                            <button class="comment-action-btn reply-delete-btn" onclick="deleteComment('${r.id}')">🗑️</button>
+                            <button type="button" class="comment-action-btn reply-delete-btn" title="Borrar respuesta" aria-label="Borrar respuesta" onclick="deleteComment('${r.id}')">🗑️</button>
                         </div>
                     </div>`;
                     });
@@ -1972,7 +2093,7 @@ function setDailyViewMode(mode) {
 
         function notifyCommentAuthorByEmail(parentComment, replyText, projectId, dateKey) {
             if (!parentComment) {
-                alert('No se pudo identificar el comentario original para enviar el email.');
+                showToast('No se pudo identificar el comentario original para enviar el email.', 'error');
                 return;
             }
 
@@ -1980,7 +2101,7 @@ function setDailyViewMode(mode) {
             const recipientEmail = getUserEmailByInitials(authorInitials);
 
             if (!recipientEmail) {
-                alert(`No hay email configurado para ${authorInitials || 'el autor original'}.`);
+                showToast(`No hay email configurado para ${authorInitials || 'el autor original'}.`, 'warning');
                 return;
             }
 
@@ -1996,29 +2117,32 @@ function setDailyViewMode(mode) {
 
             const opened = openCorporateEmailDraft(recipientEmail, subject, body);
             if (!opened) {
-                alert('No se pudo abrir el cliente de correo.');
+                showToast('No se pudo abrir el cliente de correo.', 'error');
             }
         }
 
-        async function saveCommentReply(parentId, projectId, dateKey, notifyByEmail = false) {
-            const ta = document.getElementById('replyText_' + parentId);
-            if (!ta) return;
+        // Inserta una respuesta a un comentario (lógica compartida Daily/Ficha)
+        async function submitCommentReply(textareaId, parentId, projectId, dateKey, notifyByEmail) {
+            const ta = document.getElementById(textareaId);
+            if (!ta) return false;
             const text = ta.value.trim();
-            if (!text) { ta.focus(); return; }
+            if (!text) {
+                ta.focus();
+                return false;
+            }
             const parentComment = dailyComments.find(c => c.id === parentId) || null;
             if (!canCurrentUserViewComment(parentComment)) {
-                alert('No tienes permisos para responder este comentario.');
-                return;
+                showToast('No tienes permisos para responder este comentario.', 'warning');
+                return false;
             }
 
             const now = new Date();
             const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
-            const newId = generateId();
 
             const { error } = await supabaseClient
                 .from('daily_comments')
                 .insert({
-                    id: newId,
+                    id: generateId(),
                     project_id: projectId,
                     date: dateKey,
                     time: timeStr,
@@ -2034,8 +2158,8 @@ function setDailyViewMode(mode) {
 
             if (error) {
                 console.error(error);
-                alert('Error guardando respuesta');
-                return;
+                showToast('Error guardando la respuesta', 'error');
+                return false;
             }
 
             if (notifyByEmail) {
@@ -2045,7 +2169,15 @@ function setDailyViewMode(mode) {
             activeReplyCommentId = null;
             expandedCommentThreads.add(parentId);
             await loadDataFromSupabase(true);
+            showToast('Respuesta guardada', 'success');
+            return true;
+        }
+
+        async function saveCommentReply(parentId, projectId, dateKey, notifyByEmail = false) {
+            const saved = await submitCommentReply('replyText_' + parentId, parentId, projectId, dateKey, notifyByEmail);
+            if (!saved) return;
             renderCommentsListContent(projectId, dateKey);
+            renderActiveView();
         }
 
         function toggleCommentThreadFromFicha(commentId) {
@@ -2079,71 +2211,22 @@ function setDailyViewMode(mode) {
         }
 
         async function saveCommentReplyFromFicha(parentId, projectId, dateKey, notifyByEmail = false) {
-            const ta = document.getElementById('replyTextFicha_' + parentId);
-            if (!ta) return;
-            const text = ta.value.trim();
-            if (!text) {
-                ta.focus();
-                return;
-            }
-            const parentComment = dailyComments.find(c => c.id === parentId) || null;
-            if (!canCurrentUserViewComment(parentComment)) {
-                alert('No tienes permisos para responder este comentario.');
-                return;
-            }
-
-            const now = new Date();
-            const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
-            const newId = generateId();
-
-            const { error } = await supabaseClient
-                .from('daily_comments')
-                .insert({
-                    id: newId,
-                    project_id: projectId,
-                    date: dateKey,
-                    time: timeStr,
-                    responsible: currentUser,
-                    urgency: 'Normal',
-                    has_incident: false,
-                    user_name: currentUser,
-                    text,
-                    parent_id: parentId,
-                    is_personal: !!(parentComment && parentComment.isPersonal),
-                    owner_initials: parentComment ? getCommentOwnerInitials(parentComment) : normalizeInitials(currentUser || 'US')
-                });
-
-            if (error) {
-                console.error(error);
-                alert('Error guardando respuesta');
-                return;
-            }
-
-            if (notifyByEmail) {
-                notifyCommentAuthorByEmail(parentComment, text, projectId, dateKey);
-            }
-
-            activeReplyCommentId = null;
-            expandedCommentThreads.add(parentId);
-            await loadDataFromSupabase(true);
-            renderFicha();
+            const saved = await submitCommentReply('replyTextFicha_' + parentId, parentId, projectId, dateKey, notifyByEmail);
+            if (saved) renderFicha();
         }
 
 
 
-        // ========== AÑADIR AQUÍ LA NUEVA FUNCIÓN ==========
-        async function toggleCommentCompletion(event, commentId) {
-            event.stopPropagation();
-
+        // Cambia el estado completado de un comentario (lógica compartida Daily/Ficha)
+        async function setCommentCompletion(commentId) {
             const comment = dailyComments.find(c => c.id === commentId);
-            if (!comment) return;
+            if (!comment) return false;
             if (!canCurrentUserManageComment(comment)) {
-                alert('No tienes permisos para modificar este comentario.');
-                return;
+                showToast('No tienes permisos para modificar este comentario.', 'warning');
+                return false;
             }
 
             const newCompletedState = !comment.completed;
-
             const { error } = await supabaseClient
                 .from('daily_comments')
                 .update({ completed: newCompletedState })
@@ -2151,51 +2234,34 @@ function setDailyViewMode(mode) {
 
             if (error) {
                 console.error(error);
-                alert('Error actualizando estado de completado');
-                return;
+                showToast('Error actualizando el estado del comentario', 'error');
+                return false;
             }
 
-            // Actualizar en memoria y re-renderizar
             comment.completed = newCompletedState;
+            return true;
+        }
 
+        async function toggleCommentCompletion(event, commentId) {
+            event.stopPropagation();
+            if (!(await setCommentCompletion(commentId))) return;
             const { projectId, dateKey } = commentsListContext;
             if (projectId && dateKey) {
                 renderCommentsListContent(projectId, dateKey);
             }
+            renderActiveView();
         }
 
         async function toggleCommentCompletionFromFicha(event, commentId) {
             event.stopPropagation();
-
-            const comment = dailyComments.find(c => c.id === commentId);
-            if (!comment) return;
-            if (!canCurrentUserManageComment(comment)) {
-                alert('No tienes permisos para modificar este comentario.');
-                return;
-            }
-
-            const newCompletedState = !comment.completed;
-
-            const { error } = await supabaseClient
-                .from('daily_comments')
-                .update({ completed: newCompletedState })
-                .eq('id', commentId);
-
-            if (error) {
-                console.error(error);
-                alert('Error actualizando estado de completado');
-                return;
-            }
-
-            // Actualizar en memoria y re-renderizar la ficha
-            comment.completed = newCompletedState;
+            if (!(await setCommentCompletion(commentId))) return;
             renderFicha();
         }
 
         // ===================================================
 
         function closeCommentsListModal() {
-            document.getElementById('commentsListModal').classList.remove('active');
+            closeModal('commentsListModal');
             activeReplyCommentId = null;
             expandedCommentThreads.clear();
         }
@@ -2216,7 +2282,7 @@ function setDailyViewMode(mode) {
                 return;
             }
             if (!canCurrentUserManageComment(comment)) {
-                alert('No tienes permisos para editar este comentario.');
+                showToast('No tienes permisos para editar este comentario.', 'warning');
                 return;
             }
             // console.log('Comentario encontrado:', comment);
@@ -2226,14 +2292,15 @@ function setDailyViewMode(mode) {
 
 
         async function deleteComment(commentId) {
-            const confirmed = confirm('¿Seguro que quieres borrar este comentario?');
-            if (!confirmed) return;
-
             const comment = dailyComments.find(c => c.id === commentId);
             if (comment && !canCurrentUserManageComment(comment)) {
-                alert('No tienes permisos para borrar este comentario.');
+                showToast('No tienes permisos para borrar este comentario.', 'warning');
                 return;
             }
+
+            const isReply = !!(comment && comment.parentId);
+            const confirmed = confirm(isReply ? '¿Borrar esta respuesta?' : '¿Seguro que quieres borrar este comentario?');
+            if (!confirmed) return;
 
             const { projectId, dateKey } = commentsListContext;
 
@@ -2244,14 +2311,14 @@ function setDailyViewMode(mode) {
 
             if (error) {
                 console.error(error);
-                alert('Error borrando comentario');
+                showToast('Error borrando comentario', 'error');
                 return;
             }
 
-            // Recargar datos SIN cerrar el modal
-            await loadDataFromSupabase(true); // skipRender = true
+            await loadDataFromSupabase(true);
+            renderActiveView();
+            showToast('Comentario borrado', 'success');
 
-            // Reabrir la lista actualizada
             if (projectId && dateKey) {
                 openCommentsList(new Event('click'), projectId, dateKey);
             }
@@ -2278,10 +2345,11 @@ function setDailyViewMode(mode) {
                     update.end_date = value || null;
                     project.endDate = value || null;
                     break;
-case "phase":
-    update = { phase: value };
-    project.phase = value;
-    break;
+                case 'phase':
+                    update.phase = value;
+                    project.phase = value;
+                    renderProjectsList();
+                    break;
 
                 case 'volume':
                     update.volume = value;
@@ -2341,10 +2409,9 @@ case "phase":
 
             if (error) {
                 console.error('Error updating project field:', error);
-                alert('Error al guardar el campo ' + field);
+                showToast('Error al guardar el campo ' + field, 'error');
             } else {
-                // Opcional: recargar para asegurar sincronía, pero no estrictamente necesario si la optimista funciona
-                // await loadProjects(); 
+                showToast('Cambios guardados', 'success', { key: 'autosave', duration: 1500 });
             }
         }
 
@@ -2443,10 +2510,10 @@ function renderCapacityWidget() {
             <div class="widget-title">💼 Capacidad Semanal</div>
         </div>
         
-        <div class="capacity-week-nav">
-            <button onclick="previousCapacityWeek()">◀</button>
+        <div class="capacity-week-nav widget-week-nav">
+            <button type="button" class="widget-nav-btn" onclick="previousCapacityWeek()" aria-label="Semana anterior">◀</button>
             <div class="capacity-week-info">${formatWeek(week1Start)}</div>
-            <button onclick="nextCapacityWeek()">▶</button>
+            <button type="button" class="widget-nav-btn" onclick="nextCapacityWeek()" aria-label="Semana siguiente">▶</button>
         </div>
         
         <div class="capacity-weeks-container">`;
@@ -2481,6 +2548,7 @@ function renderCapacityWidget() {
             <div class="capacity-input-wrapper">
                 <input type="number"
                        class="capacity-input"
+                       aria-label="Capacidad de ${user}, semana ${label.toLowerCase()} (%)"
                        value="${value}"
                        min="0"
                        max="100"
@@ -2518,7 +2586,7 @@ function renderCapacityWidget() {
                     .update({ capacity_percent: capacity })
                     .eq('id', projectCapacities[existingIndex].id);
 
-                if (error) console.error(error);
+                if (error) { console.error(error); showToast('No se pudo guardar la capacidad', 'error'); }
             } else {
                 // Crear
                 const newId = generateId();
@@ -2542,7 +2610,7 @@ function renderCapacityWidget() {
                         capacity_percent: capacity
                     });
 
-                if (error) console.error(error);
+                if (error) { console.error(error); showToast('No se pudo guardar la capacidad', 'error'); }
             }
 
             renderCapacityWidgetInPlace();
@@ -2610,7 +2678,7 @@ function renderCapacityWidget() {
                     created_by: currentUser || 'US'
                 });
 
-            if (error) { console.error('Error añadiendo tarea semanal:', error); return; }
+            if (error) { console.error('Error añadiendo tarea semanal:', error); showToast('No se pudo guardar el cambio', 'error'); return; }
             await loadWeeklyTasks();
             renderWeeklyWidgetInPlace();
         }
@@ -2621,18 +2689,19 @@ function renderCapacityWidget() {
                 .update({ done: done })
                 .eq('id', id);
 
-            if (error) { console.error(error); return; }
+            if (error) { console.error(error); showToast('No se pudo guardar el cambio', 'error'); return; }
             await loadWeeklyTasks();
             renderWeeklyWidgetInPlace();
         }
 
         async function deleteWeeklyTask(id) {
+            if (!confirm('¿Eliminar este objetivo semanal?')) return;
             const { error } = await supabaseClient
                 .from('project_weekly_tasks')
                 .delete()
                 .eq('id', id);
 
-            if (error) { console.error(error); return; }
+            if (error) { console.error(error); showToast('No se pudo guardar el cambio', 'error'); return; }
             await loadWeeklyTasks();
             renderWeeklyWidgetInPlace();
         }
@@ -2667,42 +2736,42 @@ function renderCapacityWidget() {
             <div class="widget-title">📋 Weekly</div>
             ${total > 0 ? `<span class="weekly-count-badge">${done}/${total}</span>` : ''}
         </div>
-        <div class="weekly-week-nav">
-            <button onclick="previousWeeklyWeek()">◀</button>
+        <div class="weekly-week-nav widget-week-nav">
+            <button type="button" class="widget-nav-btn" onclick="previousWeeklyWeek()" aria-label="Semana anterior">◀</button>
             <div class="weekly-week-info">
                 <span class="weekly-week-num">Sem. ${weekNum}</span>
                 <span class="weekly-week-dates">${weekLabel}</span>
                 ${isCurrentWeek ? '<span class="week-current-badge">Actual</span>' : ''}
             </div>
-            <button onclick="nextWeeklyWeek()">▶</button>
+            <button type="button" class="widget-nav-btn" onclick="nextWeeklyWeek()" aria-label="Semana siguiente">▶</button>
         </div>`;
 
             if (total > 0) {
-                html += `<div class="weekly-progress-bar"><div class="weekly-progress-fill" style="width:${pct}%"></div></div>`;
+                html += `<div class="weekly-progress-bar" role="progressbar" aria-label="Objetivos completados" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><div class="weekly-progress-fill" style="width:${pct}%"></div></div>`;
             }
 
             html += `<div class="weekly-tasks-list">`;
 
             if (!tasks.length) {
-                html += `<div class="empty-state" style="font-size:12px; margin:4px 0 8px;">Sin objetivos esta semana. Añade el primero abajo.</div>`;
+                html += `<div class="empty-state empty-state--compact">Sin objetivos esta semana. Añade el primero abajo.</div>`;
             } else {
                 tasks.forEach(task => {
                     html += `
                 <div class="weekly-task-item${task.done ? ' task-done' : ''}">
                     <label class="weekly-task-check">
-                        <input type="checkbox" ${task.done ? 'checked' : ''} onchange="toggleWeeklyTask('${task.id}', this.checked)">
+                        <input type="checkbox" ${task.done ? 'checked' : ''} aria-label="Completado: ${escapeHtml(task.text)}" onchange="toggleWeeklyTask('${task.id}', this.checked)">
                     </label>
                     <span class="weekly-task-text">${escapeHtml(task.text)}</span>
-                    <button class="weekly-task-delete" onclick="deleteWeeklyTask('${task.id}')" title="Eliminar">×</button>
+                    <button type="button" class="weekly-task-delete" onclick="deleteWeeklyTask('${task.id}')" title="Eliminar objetivo" aria-label="Eliminar objetivo: ${escapeHtml(task.text)}">×</button>
                 </div>`;
                 });
             }
 
             html += `</div>
         <div class="weekly-add-row">
-            <input type="text" id="weeklyNewTask" class="weekly-new-task-input" placeholder="Nuevo objetivo..."
+            <input type="text" id="weeklyNewTask" class="weekly-new-task-input" placeholder="Nuevo objetivo..." aria-label="Nuevo objetivo semanal"
                 onkeydown="if(event.key==='Enter') addWeeklyTask()">
-            <button class="weekly-add-btn" onclick="addWeeklyTask()" title="Añadir">+</button>
+            <button type="button" class="weekly-add-btn" onclick="addWeeklyTask()" title="Añadir objetivo" aria-label="Añadir objetivo">+</button>
         </div>
     </div>`;
 
@@ -2710,10 +2779,6 @@ function renderCapacityWidget() {
         }
 
 
-        function closeCapacityWidget() {
-            const widget = document.getElementById('capacityWidget');
-            if (widget) widget.remove();
-        }
 
 
 
@@ -2848,9 +2913,9 @@ function renderLastStatusWidget() {
     const older = allStatuses.slice(1);
 
     let html = `
-    <div class="widget-box" style="display:flex; flex-direction:column;">
-        <div class="capacity-widget-header">
-            <div class="capacity-widget-title">📢 ÚLTIMO ESTADO</div>
+    <div class="widget-box last-status-widget">
+        <div class="widget-header">
+            <div class="widget-title">📢 Último estado</div>
         </div>
         
         <div id="status-display-area">`;
@@ -2861,20 +2926,18 @@ function renderLastStatusWidget() {
     
     html += `
     <div class="current-status-highlight">
-        <div class="status-meta" style="color:#7a1ea2; font-weight:bold; margin-bottom:8px; font-size:11px;">
+        <div class="status-meta status-meta--current">
             ${dateStr} - ${escapeHtml(last.userInitials)}
         </div>
-        <div class="status-content" style="font-size:13px; color:#333; line-height:1.4;">${escapeHtml(last.statusText)}</div>
+        <div class="status-content">${escapeHtml(last.statusText)}</div>
     </div>`;
     } else {
-        html += `<div class="empty-state" style="padding:10px;">No hay estados registrados.</div>`;
+        html += `<div class="empty-state empty-state--compact">No hay estados registrados.</div>`;
     }
 
     if (older.length > 0) {
         html += `
-        <div style="font-size:10px; font-weight:bold; color:#888; margin-bottom:5px; text-transform:uppercase;">
-            Historial Anterior
-        </div>
+        <div class="status-history-title">Historial anterior</div>
         <div class="status-history-container">`;
         
         older.forEach(s => {
@@ -2883,11 +2946,11 @@ function renderLastStatusWidget() {
             
             html += `
             <div class="history-item">
-                <div class="status-meta" style="display:flex; justify-content:space-between; font-size:10px; color:#999; margin-bottom:2px;">
+                <div class="status-meta">
                     <span>${dateStr}</span>
                     <span>${escapeHtml(s.userInitials)}</span>
                 </div>
-                <div style="color:#555; font-size:11px;">${escapeHtml(s.statusText)}</div>
+                <div class="history-text">${escapeHtml(s.statusText)}</div>
             </div>`;
         });
         
@@ -2897,9 +2960,9 @@ function renderLastStatusWidget() {
     html += `</div>`;
 
     html += `
-        <div class="status-input-area" style="margin-top:auto; padding-top:10px; border-top:1px solid #eee;">
-            <textarea id="newStatusTextWidget" placeholder="Escribe una actualización..."></textarea>
-            <button class="btn-save-status" onclick="saveProjectStatus()">Publicar</button>
+        <div class="status-input-area">
+            <textarea id="newStatusTextWidget" placeholder="Escribe una actualización..." aria-label="Nueva actualización de estado"></textarea>
+            <button type="button" class="btn-save-status" onclick="saveProjectStatus()">Publicar</button>
         </div>
     </div>`;
 
@@ -2916,7 +2979,7 @@ function renderLastStatusWidget() {
     const text = textarea ? textarea.value.trim() : '';
     
     if (!text) {
-        alert('Por favor escribe algo');
+        showToast('Por favor escribe algo', 'warning');
         return;
     }
 
@@ -2934,7 +2997,7 @@ function renderLastStatusWidget() {
         
     if (error) {
         console.error(error);
-        alert('Error al guardar');
+        showToast('Error al guardar', 'error');
         return;
     }
 
@@ -2948,12 +3011,17 @@ function renderLastStatusWidget() {
 
     if (textarea) textarea.value = '';
     renderFicha();
+    showToast('Estado publicado', 'success');
 }
 
         function openProjectNoteEditor(noteId = null) {
     projectNoteEditorState.isOpen = true;
     projectNoteEditorState.editNoteId = noteId;
     renderFicha();
+    setTimeout(() => {
+        const titleInput = document.getElementById('projectNoteTitle');
+        if (titleInput) titleInput.focus();
+    }, 0);
 }
 
         function closeProjectNoteEditor() {
@@ -2982,13 +3050,13 @@ function renderLastStatusWidget() {
     const color = colorEl ? colorEl.value : 'yellow';
 
     if (!title && !body && !rawUrl) {
-        alert('Añade al menos título, contenido o URL.');
+        showToast('Añade al menos título, contenido o URL.', 'warning');
         return;
     }
 
     const normalizedUrl = normalizeDocumentationUrl(rawUrl);
     if (normalizedUrl === null) {
-        alert('URL inválida. Usa una URL http(s) válida.');
+        showToast('URL inválida. Usa una URL http(s) válida.', 'error');
         return;
     }
 
@@ -3012,7 +3080,7 @@ function renderLastStatusWidget() {
         if (error) {
             const details = formatSupabaseError(error, 'No se pudo actualizar la nota');
             console.error('Error actualizando nota:', details);
-            alert('Error actualizando nota: ' + details);
+            showToast('Error actualizando nota: ' + details, 'error');
             return;
         }
     } else {
@@ -3035,7 +3103,7 @@ function renderLastStatusWidget() {
         if (error) {
             const details = formatSupabaseError(error, 'No se pudo guardar la nota');
             console.error('Error guardando nota:', details);
-            alert('Error guardando nota: ' + details);
+            showToast('Error guardando nota: ' + details, 'error');
             return;
         }
     }
@@ -3044,6 +3112,7 @@ function renderLastStatusWidget() {
     projectNoteEditorState.editNoteId = null;
     await loadProjectNotes();
     renderFicha();
+    showToast(editId ? 'Nota actualizada' : 'Nota guardada', 'success');
 }
 
         async function deleteProjectNote(noteId) {
@@ -3058,7 +3127,7 @@ function renderLastStatusWidget() {
     if (error) {
         const details = formatSupabaseError(error, 'No se pudo eliminar la nota');
         console.error('Error eliminando nota:', details);
-        alert('Error eliminando nota: ' + details);
+        showToast('Error eliminando nota: ' + details, 'error');
         return;
     }
 
@@ -3069,6 +3138,7 @@ function renderLastStatusWidget() {
 
     await loadProjectNotes();
     renderFicha();
+    showToast('Nota eliminada', 'success');
 }
 
         function renderProjectNotesWidget() {
@@ -3086,31 +3156,31 @@ function renderLastStatusWidget() {
 
     let html = `<div class="widget-box project-notes-widget">
         <div class="widget-header notes-widget-header">
-            <div class="widget-title">📄Notas del Proyecto</div>
-            <button class="notes-add-btn" onclick="openProjectNoteEditor()" title="Nueva nota">+</button>
+            <div class="widget-title">📄 Notas del proyecto</div>
+            <button type="button" class="notes-add-btn" onclick="openProjectNoteEditor()" title="Nueva nota" aria-label="Nueva nota">+</button>
         </div>`;
 
     if (projectNoteEditorState.isOpen) {
         html += `
         <div class="project-note-editor">
-            <input id="projectNoteTitle" type="text" maxlength="120" placeholder="Titulo breve" value="${escapeHtml(noteTitle)}">
-            <textarea id="projectNoteBody" placeholder="Info general, contexto, enlaces, pendientes...">${escapeHtml(noteBody)}</textarea>
-            <input id="projectNoteUrl" type="text" placeholder="https://... (opcional)" value="${escapeHtml(noteUrl)}">
+            <input id="projectNoteTitle" type="text" maxlength="120" placeholder="Título breve" aria-label="Título de la nota" value="${escapeHtml(noteTitle)}">
+            <textarea id="projectNoteBody" placeholder="Info general, contexto, enlaces, pendientes..." aria-label="Contenido de la nota">${escapeHtml(noteBody)}</textarea>
+            <input id="projectNoteUrl" type="url" inputmode="url" placeholder="https://... (opcional)" aria-label="Enlace de la nota" value="${escapeHtml(noteUrl)}">
             <div class="project-note-editor-row">
-                <select id="projectNoteColor">
+                <select id="projectNoteColor" aria-label="Color de la nota">
                     <option value="yellow" ${noteColor === 'yellow' ? 'selected' : ''}>Amarillo</option>
                     <option value="mint" ${noteColor === 'mint' ? 'selected' : ''}>Menta</option>
                     <option value="salmon" ${noteColor === 'salmon' ? 'selected' : ''}>Salmon</option>
                     <option value="sky" ${noteColor === 'sky' ? 'selected' : ''}>Cielo</option>
                 </select>
-                <button class="btn-save-note" onclick="saveProjectNote()">Guardar</button>
-                <button class="btn-cancel-note" onclick="closeProjectNoteEditor()">Cancelar</button>
+                <button type="button" class="btn-save-note" onclick="saveProjectNote()">Guardar</button>
+                <button type="button" class="btn-cancel-note" onclick="closeProjectNoteEditor()">Cancelar</button>
             </div>
         </div>`;
     }
 
     if (!notes.length) {
-        html += `<div class="empty-state" style="margin-top: 8px;">Sin notas todavía. Pulsa + para crear la primera.</div>`;
+        html += `<div class="empty-state empty-state--compact">Sin notas todavía. Pulsa + para crear la primera.</div>`;
         html += `</div>`;
         return html;
     }
@@ -3128,8 +3198,8 @@ function renderLastStatusWidget() {
             <div class="project-note-card-header">
                 <div class="project-note-title">${escapeHtml(note.title || 'Nota rápida')}</div>
                 <div class="project-note-actions">
-                    <button onclick="openProjectNoteEditor('${note.id}')" title="Editar">Editar</button>
-                    <button onclick="deleteProjectNote('${note.id}')" title="Eliminar">X</button>
+                    <button type="button" onclick="openProjectNoteEditor('${note.id}')" title="Editar nota">Editar</button>
+                    <button type="button" class="project-note-delete" onclick="deleteProjectNote('${note.id}')" title="Eliminar nota" aria-label="Eliminar nota">×</button>
                 </div>
             </div>
             ${note.body ? `<div class="project-note-body">${escapeHtml(note.body).replace(/\n/g, '<br>')}</div>` : ''}
@@ -3174,7 +3244,7 @@ function renderLastStatusWidget() {
                     created_by: currentUser || 'US'
                 });
 
-            if (error) { console.error('Error añadiendo incidencia:', error); return; }
+            if (error) { console.error('Error añadiendo incidencia:', error); showToast('No se pudo guardar el cambio', 'error'); return; }
             await loadIncidents();
             renderIncidentsWidgetInPlace();
         }
@@ -3185,18 +3255,19 @@ function renderLastStatusWidget() {
                 .update({ resolved: resolved })
                 .eq('id', id);
 
-            if (error) { console.error(error); return; }
+            if (error) { console.error(error); showToast('No se pudo guardar el cambio', 'error'); return; }
             await loadIncidents();
             renderIncidentsWidgetInPlace();
         }
 
         async function deleteIncident(id) {
+            if (!confirm('¿Eliminar esta incidencia?')) return;
             const { error } = await supabaseClient
                 .from('project_incidents')
                 .delete()
                 .eq('id', id);
 
-            if (error) { console.error(error); return; }
+            if (error) { console.error(error); showToast('No se pudo guardar el cambio', 'error'); return; }
             await loadIncidents();
             renderIncidentsWidgetInPlace();
         }
@@ -3217,29 +3288,29 @@ function renderLastStatusWidget() {
         <div class="incidents-list">`;
 
             if (!all.length) {
-                html += `<div class="empty-state" style="font-size:12px; margin:4px 0 8px;">Sin incidencias registradas.</div>`;
+                html += `<div class="empty-state empty-state--compact">Sin incidencias registradas.</div>`;
             } else {
                 all.forEach(incident => {
                     const dateStr = new Date(incident.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' });
                     html += `
                 <div class="incident-item ${incident.resolved ? 'incident-resolved' : 'incident-open'}">
                     <label class="incident-check" title="${incident.resolved ? 'Reabrir' : 'Marcar resuelta'}">
-                        <input type="checkbox" ${incident.resolved ? 'checked' : ''} onchange="toggleIncident('${incident.id}', this.checked)">
+                        <input type="checkbox" ${incident.resolved ? 'checked' : ''} aria-label="${incident.resolved ? 'Reabrir' : 'Marcar resuelta'}: ${escapeHtml(incident.description)}" onchange="toggleIncident('${incident.id}', this.checked)">
                     </label>
                     <div class="incident-content">
                         <span class="incident-text">${escapeHtml(incident.description)}</span>
                         <span class="incident-meta">${dateStr}${incident.createdBy ? ` &middot; ${escapeHtml(incident.createdBy)}` : ''}</span>
                     </div>
-                    <button class="incident-delete" onclick="deleteIncident('${incident.id}')" title="Eliminar">&times;</button>
+                    <button type="button" class="incident-delete" onclick="deleteIncident('${incident.id}')" title="Eliminar incidencia" aria-label="Eliminar incidencia: ${escapeHtml(incident.description)}">&times;</button>
                 </div>`;
                 });
             }
 
             html += `</div>
         <div class="weekly-add-row">
-            <input type="text" id="incidentNewText" class="weekly-new-task-input" placeholder="Describir incidencia..."
+            <input type="text" id="incidentNewText" class="weekly-new-task-input" placeholder="Describir incidencia..." aria-label="Nueva incidencia"
                 onkeydown="if(event.key==='Enter') addIncident()">
-            <button class="weekly-add-btn" onclick="addIncident()" title="A&ntilde;adir">+</button>
+            <button type="button" class="weekly-add-btn" onclick="addIncident()" title="A&ntilde;adir incidencia" aria-label="A&ntilde;adir incidencia">+</button>
         </div>
     </div>`;
 
@@ -3276,71 +3347,69 @@ function renderLastStatusWidget() {
         <div class="project-title-section">
             <div class="ficha-title">${escapeHtml(project.name)}
                 <span class="project-mini-indicators">
-                    <span class="mini-indicator priority-${(project.priority || 'Media').toLowerCase()}" onclick="toggleIndicatorDropdown(event, 'priority')">
+                    <span class="mini-indicator priority-${(project.priority || 'Media').toLowerCase()}" role="button" tabindex="0" aria-haspopup="true" aria-label="Prioridad: ${project.priority || 'Media'}. Pulsa para cambiar" onclick="toggleIndicatorDropdown(event, 'priority')" onkeydown="handleIndicatorKey(event, 'priority')">
                         <span class="mini-label">Prioridad:</span>
                         <span class="mini-value">${project.priority || 'Media'}</span>
                         <div class="indicator-dropdown" id="dropdown-priority">
-                            <div class="indicator-option ${project.priority === 'Baja' ? 'selected' : ''}" onclick="updateIndicator(event, '${project.id}', 'priority', 'Baja')">Baja</div>
-                            <div class="indicator-option ${(project.priority || 'Media') === 'Media' ? 'selected' : ''}" onclick="updateIndicator(event, '${project.id}', 'priority', 'Media')">Media</div>
-                            <div class="indicator-option ${project.priority === 'Alta' ? 'selected' : ''}" onclick="updateIndicator(event, '${project.id}', 'priority', 'Alta')">Alta</div>
+                            <div class="indicator-option ${project.priority === 'Baja' ? 'selected' : ''}" role="button" tabindex="0" onclick="updateIndicator(event, '${project.id}', 'priority', 'Baja')" onkeydown="activateOnEnterOrSpace(event)">Baja</div>
+                            <div class="indicator-option ${(project.priority || 'Media') === 'Media' ? 'selected' : ''}" role="button" tabindex="0" onclick="updateIndicator(event, '${project.id}', 'priority', 'Media')" onkeydown="activateOnEnterOrSpace(event)">Media</div>
+                            <div class="indicator-option ${project.priority === 'Alta' ? 'selected' : ''}" role="button" tabindex="0" onclick="updateIndicator(event, '${project.id}', 'priority', 'Alta')" onkeydown="activateOnEnterOrSpace(event)">Alta</div>
                         </div>
                     </span>
-                    <span class="mini-indicator impact-${(project.impact || 'Medio').toLowerCase()}" onclick="toggleIndicatorDropdown(event, 'impact')">
+                    <span class="mini-indicator impact-${(project.impact || 'Medio').toLowerCase()}" role="button" tabindex="0" aria-haspopup="true" aria-label="Impacto: ${project.impact || 'Medio'}. Pulsa para cambiar" onclick="toggleIndicatorDropdown(event, 'impact')" onkeydown="handleIndicatorKey(event, 'impact')">
                         <span class="mini-label">Impacto:</span>
                         <span class="mini-value">${project.impact || 'Medio'}</span>
                         <div class="indicator-dropdown" id="dropdown-impact">
-                            <div class="indicator-option ${project.impact === 'Bajo' ? 'selected' : ''}" onclick="updateIndicator(event, '${project.id}', 'impact', 'Bajo')">Bajo</div>
-                            <div class="indicator-option ${(project.impact || 'Medio') === 'Medio' ? 'selected' : ''}" onclick="updateIndicator(event, '${project.id}', 'impact', 'Medio')">Medio</div>
-                            <div class="indicator-option ${project.impact === 'Alto' ? 'selected' : ''}" onclick="updateIndicator(event, '${project.id}', 'impact', 'Alto')">Alto</div>
+                            <div class="indicator-option ${project.impact === 'Bajo' ? 'selected' : ''}" role="button" tabindex="0" onclick="updateIndicator(event, '${project.id}', 'impact', 'Bajo')" onkeydown="activateOnEnterOrSpace(event)">Bajo</div>
+                            <div class="indicator-option ${(project.impact || 'Medio') === 'Medio' ? 'selected' : ''}" role="button" tabindex="0" onclick="updateIndicator(event, '${project.id}', 'impact', 'Medio')" onkeydown="activateOnEnterOrSpace(event)">Medio</div>
+                            <div class="indicator-option ${project.impact === 'Alto' ? 'selected' : ''}" role="button" tabindex="0" onclick="updateIndicator(event, '${project.id}', 'impact', 'Alto')" onkeydown="activateOnEnterOrSpace(event)">Alto</div>
                         </div>
                     </span>
-                    <button class="resp-btn-header" data-project-id="${project.id}" onclick="openResponsiblesPopover('${project.id}')">+</button>
+                    <button type="button" class="resp-btn-header" data-project-id="${project.id}" title="Añadir responsable" aria-label="Añadir responsable" onclick="openResponsiblesPopover('${project.id}')">+</button>
                     <div class="resp-badges-header">
                         ${project.responsibles && project.responsibles.length > 0 ? project.responsibles.map(resp => `
-                            <span class="resp-badge-header">${resp} <button type="button" onclick="removeResponsible('${project.id}', '${resp}')" class="resp-remove-header">✕</button></span>
+                            <span class="resp-badge-header">${escapeHtml(resp)} <button type="button" onclick="removeResponsible('${project.id}', '${resp}')" class="resp-remove-header" title="Quitar a ${escapeHtml(resp)}" aria-label="Quitar responsable ${escapeHtml(resp)}">✕</button></span>
                         `).join('') : ''}
                     </div>
                 </span>
             </div>
         </div>
         
-        <!-- Círculo de Progreso Final (Centrado y funcional) -->
         <div class="progress-indicator-centered">
             <div class="progress-indicator">
-                <svg class="progress-ring" width="60" height="60">
+                <svg class="progress-ring" width="60" height="60" aria-hidden="true">
                     <circle class="progress-ring-bg" cx="30" cy="30" r="26" stroke-width="5" />
                     <circle class="progress-ring-progress" cx="30" cy="30" r="26" stroke-width="5"
                             style="stroke-dasharray: 163; stroke-dashoffset: ${163 - (163 * progressPercent / 100)}; stroke: ${progressColor}" />
                 </svg>
                 
-                <div class="progress-text" style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
-                    <!-- Input numérico + Símbolo % -->
-                    <div style="display: flex; align-items: center; justify-content: center; transform: translateX(-3px);">
-                        <input type="number" 
-                               class="progress-input" 
-                               value="${progressPercent}" 
-                               min="0" 
-                               max="100" 
+                <div class="progress-text">
+                    <div class="progress-value">
+                        <input type="number"
+                               class="progress-input"
+                               value="${progressPercent}"
+                               min="0"
+                               max="100"
                                id="progressInput${project.id}"
-                               style="width: 28px; text-align: right; padding: 0; font-size: 14px; border: none; background: transparent; color: var(--color-primary); font-weight: 700;"
+                               aria-label="Avance del proyecto (%)"
                                onchange="updateProjectProgress('${project.id}', this.value)"
                                onwheel="handleProgressWheel(event, '${project.id}', this.value)"
                                onclick="this.select()" />
-                        <span style="font-size: 10px; font-weight: 700; color: var(--color-primary); margin-left: 1px;">%</span>
+                        <span class="progress-percent" aria-hidden="true">%</span>
                     </div>
-                    <span class="progress-label" style="font-size: 6px; margin-top: 0; transform: translateX(-1px);">AVANCE</span>
+                    <span class="progress-label" aria-hidden="true">Avance</span>
                 </div>
             </div>
         </div>
         
         <div class="status-badge-container">
-            <div class="status-badge status-${(project.status || 'Verde').toLowerCase()}" onclick="toggleIndicatorDropdown(event, 'status')">
+            <div class="status-badge status-${(project.status || 'Verde').toLowerCase()}" role="button" tabindex="0" aria-haspopup="true" aria-label="Estado: ${getStatusText(project.status || 'Verde')}. Pulsa para cambiar" onclick="toggleIndicatorDropdown(event, 'status')" onkeydown="handleIndicatorKey(event, 'status')">
                 <span class="status-icon">${getStatusIcon(project.status || 'Verde')}</span>
                 <span class="status-text">${getStatusText(project.status || "Verde")}</span>
                 <div class="indicator-dropdown" id="dropdown-status">
-                    <div class="indicator-option ${(project.status || 'Verde') === 'Verde' ? 'selected' : ''}" onclick="updateIndicator(event, '${project.id}', 'status', 'Verde')">✅ On Time</div>
-                    <div class="indicator-option ${project.status === 'Ámbar' ? 'selected' : ''}" onclick="updateIndicator(event, '${project.id}', 'status', 'Ámbar')">⚠️ Riesgo</div>
-                    <div class="indicator-option ${project.status === 'Rojo' ? 'selected' : ''}" onclick="updateIndicator(event, '${project.id}', 'status', 'Rojo')">🚫 Bloqueo</div>
+                    <div class="indicator-option ${(project.status || 'Verde') === 'Verde' ? 'selected' : ''}" role="button" tabindex="0" onclick="updateIndicator(event, '${project.id}', 'status', 'Verde')" onkeydown="activateOnEnterOrSpace(event)">✅ On Time</div>
+                    <div class="indicator-option ${project.status === 'Ámbar' ? 'selected' : ''}" role="button" tabindex="0" onclick="updateIndicator(event, '${project.id}', 'status', 'Ámbar')" onkeydown="activateOnEnterOrSpace(event)">⚠️ Riesgo</div>
+                    <div class="indicator-option ${project.status === 'Rojo' ? 'selected' : ''}" role="button" tabindex="0" onclick="updateIndicator(event, '${project.id}', 'status', 'Rojo')" onkeydown="activateOnEnterOrSpace(event)">🚫 Bloqueo</div>
                 </div>
             </div>
         </div>
@@ -3350,13 +3419,13 @@ function renderLastStatusWidget() {
         <div class="ficha-field">
             <div class="ficha-label">Fecha inicio</div>
             <div class="ficha-value">
-                <input type="date" value="${project.startDate || ''}" onchange="updateProjectField('${project.id}','startDate', this.value)">
+                <input type="date" aria-label="Fecha inicio" value="${project.startDate || ''}" onchange="updateProjectField('${project.id}','startDate', this.value)">
             </div>
         </div>
         <div class="ficha-field">
             <div class="ficha-label">Fecha fin</div>
             <div class="ficha-value">
-                <input type="date" value="${project.endDate || ''}" onchange="updateProjectField('${project.id}','endDate', this.value)">
+                <input type="date" aria-label="Fecha fin" value="${project.endDate || ''}" onchange="updateProjectField('${project.id}','endDate', this.value)">
             </div>
         </div>
     </div>
@@ -3364,13 +3433,8 @@ function renderLastStatusWidget() {
         <div class="ficha-field">
             <div class="ficha-label">Fase</div>
             <div class="ficha-value">
-                <select onchange="updateProjectField('${project.id}','phase', this.value)">
-                    <option value="Idea" ${project.phase === 'Idea' ? 'selected' : ''}>Idea</option>
-                    <option value="En Progreso" ${project.phase === 'En Progreso' ? 'selected' : ''}>En Progreso</option>
-                    <option value="On Hold" ${project.phase === 'On Hold' ? 'selected' : ''}>On Hold</option>
-                    <option value="Mantenimiento" ${project.phase === 'Mantenimiento' ? 'selected' : ''}>Mantenimiento</option>
-                    <option value="Hypercare" ${project.phase === 'Hypercare' ? 'selected' : ''}>Hypercare</option>
-                    <option value="Cerrado" ${project.phase === 'Cerrado' ? 'selected' : ''}>Cerrado</option>
+                <select aria-label="Fase" onchange="updateProjectField('${project.id}','phase', this.value)">
+                    ${renderPhaseOptions(project.phase)}
                 </select>
             </div>
         </div>
@@ -3378,8 +3442,9 @@ function renderLastStatusWidget() {
             <div class="ficha-label">Ahorro (€)</div>
             <div class="ficha-value">
                 <input type="number" 
-                       placeholder="0.00" 
-                       step="0.01" 
+                       placeholder="0.00"
+                       aria-label="Ahorro en euros"
+                       step="0.01"  
                        min="0"
                        value="${project.volume || ''}" 
                        onchange="updateProjectField('${project.id}','volume', this.value)">
@@ -3390,27 +3455,33 @@ function renderLastStatusWidget() {
         <div class="ficha-field">
             <div class="ficha-label">Stakeholders</div>
             <div class="ficha-value">
-                <input type="text" value="${escapeHtml(project.stakeholders || '')}" onchange="updateProjectField('${project.id}','stakeholders', this.value)">
+                <input type="text" aria-label="Stakeholders" value="${escapeHtml(project.stakeholders || '')}" onchange="updateProjectField('${project.id}','stakeholders', this.value)">
             </div>
         </div>
         <div class="ficha-field">
-        <div class="ficha-field">
-            <div class="ficha-label">Ahorro (FTE) </div>
+            <div class="ficha-label">Ahorro (FTE)</div>
             <div class="ficha-value">
                 <input type="number" 
-                       placeholder="0.0" 
-                       step="0.1" 
+                       placeholder="0.0"
+                       aria-label="Ahorro en FTE"
+                       step="0.1"  
                        min="0"
                        value="${project.fte || ''}" 
                        onchange="updateProjectField('${project.id}','fte', this.value)">
             </div>
         </div>
+    </div>
 </div>`;
+
+            // Secciones principales (prerrequisitos + comentarios) en una rejilla propia,
+            // fuera de la cabecera. En pantallas estrechas pasa a una columna (CSS).
+            const showPrerequisites = Array.isArray(project.prerequisites) && project.prerequisites.length > 0;
+            html += `<div class="ficha-sections-grid${showPrerequisites ? '' : ' ficha-sections-grid--single'}">`;
 
 
 
             // Prerrequisitos
-            if (project.prerequisites && project.prerequisites.length > 0) {
+            if (showPrerequisites) {
 
                 html += `<div class="ficha-section">
         <h3 class="section-title">Prerrequisitos y Documentación</h3>
@@ -3432,33 +3503,34 @@ function renderLastStatusWidget() {
                     let labelClass = '';
                     if (isDone) labelClass = 'completed';
                     else if (isNa) labelClass = 'na-active';
-                    // Si es N/A, hacemos la fila un poco transparente
-                    const rowStyle = isNa ? 'opacity: 0.6;' : '';
                     // Si es N/A, deshabilitamos el checkbox principal
                     const mainDisabled = isNa ? 'disabled' : '';
                     html += `
-        <div class="prereq-item-row" style="${rowStyle}">
+        <div class="prereq-item-row${isNa ? ' is-na' : ''}${isDone ? ' is-done' : ''}">
             <div class="prereq-left">
-                <input type="checkbox" 
-                       class="prereq-checkbox" 
+                <input type="checkbox"
+                       class="prereq-checkbox"
+                       aria-label="${stdName} completado" 
                        ${isDone ? 'checked' : ''} 
                        ${mainDisabled}
                        onchange="togglePrereqStatus('${project.id}', '${stdName}', 'done', this.checked)">
                 `;
                     if (url) {
-                        html += `<a href="${safeUrl}" class="prereq-label ${labelClass}" target="_blank" rel="noopener noreferrer" style="text-decoration:underline dotted; color:#7a1ea2; cursor:pointer;"
+                        html += `<a href="${safeUrl}" class="prereq-label prereq-link ${labelClass}" target="_blank" rel="noopener noreferrer"
                             onclick="event.stopPropagation();"
                             oncontextmenu="event.preventDefault(); handlePrereqClick(event, '${project.id}', '${stdName}'); return false;"
-                            title="Click para abrir. Click derecho para editar URL">${stdName}</a>`;
+                            title="Abrir documentación">${stdName}</a>
+                            <button type="button" class="prereq-url-btn" title="Editar URL de documentación" aria-label="Editar URL de documentación de ${stdName}"
+                            onclick="handlePrereqClick(event, '${project.id}', '${stdName}')">✎</button>`;
                     } else {
-                        html += `<span class="prereq-label ${labelClass}" style="cursor:pointer; text-decoration:none; color:#7a1ea2;"
+                        html += `<button type="button" class="prereq-label prereq-add-url ${labelClass}"
                             onclick="handlePrereqClick(event, '${project.id}', '${stdName}')"
-                            title="Añadir URL de documentación">${stdName}</span>`;
+                            title="Añadir URL de documentación">${stdName}</button>`;
                     }
                     html += `
             </div>
             <div class="prereq-na-wrapper">
-                <label for="na-${index}" style="cursor:pointer; margin-right:4px;">N/A</label>
+                <label for="na-${index}" title="No aplica">N/A</label>
                 <input type="checkbox" 
                        id="na-${index}"
                        class="prereq-na-checkbox"
@@ -3487,8 +3559,8 @@ function renderLastStatusWidget() {
 
             html += `<div class="ficha-section">
         <div class="section-title">
-            Comentarios de dailys (${projectComments.length})
-            <button style="float:right; font-size:11px; padding:3px 8px; border-radius:999px; border:none; cursor:pointer; background:#f3ecff; color:#2a1b4a;" onclick="goToDailyFromFicha()">📅 Ver en Daily</button>
+            <span>Comentarios de dailys (${projectComments.length})</span>
+            <button type="button" class="section-action-btn" onclick="goToDailyFromFicha()">📅 Ver en Daily</button>
         </div>`;
 
             if (projectTopLevelComments.length === 0) {
@@ -3512,60 +3584,47 @@ function renderLastStatusWidget() {
 
                     // Obtener iniciales del Autor (quien escribió)
                     // Si no tienes el campo 'userName' guardado, usará 'U' por defecto.
-                    const autorName = comment.userName || 'Usuario';
-                    const iniciales = autorName.substring(0, 2).toUpperCase();
+                    const autorName = escapeHtml(comment.userName || 'Usuario');
+                    const iniciales = escapeHtml((comment.userName || 'Usuario').substring(0, 2).toUpperCase());
 
                     const isCompleted = comment.completed;
                     const completedClass = isCompleted ? 'completed' : '';
                     const completedBadge = isCompleted ? '<span class="completion-badge">COMPLETADO</span>' : '';
-                    const personalBadge = comment.isPersonal ? '<span class="completion-badge" style="background:#e4fff1;border-color:#8bc7a1;color:#17663a;">PRIVADA</span>' : '';
+                    const personalBadge = comment.isPersonal ? '<span class="completion-badge completion-badge--private">PRIVADA</span>' : '';
 
                     html += `
             <div class="comment-entry ${completedClass}">
                 <div class="comment-header">
                     <div class="comment-checkbox-wrapper">
-                         <input type="checkbox" class="comment-checkbox" 
-                                ${isCompleted ? 'checked' : ''} 
+                         <input type="checkbox" class="comment-checkbox"
+                                ${isCompleted ? 'checked' : ''}
+                                aria-label="Marcar como completado"
                                 onclick="toggleCommentCompletionFromFicha(event, '${comment.id}')">
-                         
-                         <!-- Círculo con INICIALES del Autor -->
-                         <div style="
-                            width: 22px; height: 22px; 
-                            background: #e1d6f5; color: #5a3a8a; 
-                            border-radius: 50%; display: flex; align-items: center; justify-content: center; 
-                            font-size: 9px; font-weight: 700; margin-right: 6px; flex-shrink: 0;" 
-                            title="Autor: ${autorName}">
-                            ${iniciales}
-                         </div>
-
-                         <!-- Cabecera con FECHA y RESPONSABLE -->
-                         <div style="flex:1; min-width:0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                            <span style="font-weight:700; color:var(--color-primary); font-size: 11px;">${formattedDate}</span>
-                            
-                            <span style="font-size: 10px; color: var(--color-text-secondary); background: rgba(0,0,0,0.05); padding: 1px 6px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.05);">
-                                Resp: <strong>${escapeHtml(responsable)}</strong>
-                            </span>
+                         <div class="comment-avatar" title="Autor: ${autorName}">${iniciales}</div>
+                         <div class="comment-head-meta">
+                            <span class="comment-date">${formattedDate}</span>
+                            <span class="comment-resp-chip">Resp: <strong>${escapeHtml(responsable)}</strong></span>
                          </div>
                          
                          ${completedBadge}${personalBadge}
                     </div>
                 </div>
-                <div class="comment-text" style="margin-top:6px; padding-left: 58px; font-size: 12px; overflow-wrap:anywhere; word-break:break-word;">
+                <div class="comment-text comment-indent">
                     ${escapeHtml(comment.text).replace(/\n/g, '<br>')}
                 </div>
-                <div class="comment-actions" style="position: static; justify-content: flex-start; margin-top: 6px; margin-left: 58px;">
-                    ${hasReplies ? `<button class="comment-action-btn comment-thread-btn" onclick="toggleCommentThreadFromFicha('${comment.id}')">💬 ${replies.length} ${replies.length === 1 ? 'respuesta' : 'respuestas'} ${isExpanded ? '▲' : '▼'}</button>` : ''}
-                    <button class="comment-action-btn comment-reply-btn" onclick="toggleReplyFormFromFicha('${comment.id}')">↩ Responder</button>
+                <div class="comment-actions comment-actions--inline comment-indent">
+                    ${hasReplies ? `<button type="button" class="comment-action-btn comment-thread-btn" aria-expanded="${isExpanded}" onclick="toggleCommentThreadFromFicha('${comment.id}')">💬 ${replies.length} ${replies.length === 1 ? 'respuesta' : 'respuestas'} ${isExpanded ? '▲' : '▼'}</button>` : ''}
+                    <button type="button" class="comment-action-btn comment-reply-btn" onclick="toggleReplyFormFromFicha('${comment.id}')">↩ Responder</button>
                 </div>
-                ${isReplying ? `<div class="reply-form" style="margin-left:58px; margin-top:6px;">
-                    <textarea class="reply-textarea" id="replyTextFicha_${comment.id}" placeholder="Escribe tu respuesta..." rows="2"></textarea>
+                ${isReplying ? `<div class="reply-form comment-indent">
+                    <textarea class="reply-textarea" aria-label="Respuesta" id="replyTextFicha_${comment.id}" placeholder="Escribe tu respuesta..." rows="2"></textarea>
                     <div class="reply-form-actions">
-                        <button class="comment-action-btn btn-reply-send" onclick="saveCommentReplyFromFicha('${comment.id}', '${comment.projectId}', '${comment.date}')">Enviar</button>
-                        <button class="comment-action-btn btn-reply-send-mail" onclick="saveCommentReplyFromFicha('${comment.id}', '${comment.projectId}', '${comment.date}', true)">Enviar y mail</button>
-                        <button class="comment-action-btn" onclick="cancelReplyFormFromFicha()">Cancelar</button>
+                        <button type="button" class="comment-action-btn btn-reply-send" onclick="saveCommentReplyFromFicha('${comment.id}', '${comment.projectId}', '${comment.date}')">Enviar</button>
+                        <button type="button" class="comment-action-btn btn-reply-send-mail" onclick="saveCommentReplyFromFicha('${comment.id}', '${comment.projectId}', '${comment.date}', true)">Enviar y mail</button>
+                        <button type="button" class="comment-action-btn" onclick="cancelReplyFormFromFicha()">Cancelar</button>
                     </div>
                 </div>` : ''}
-                ${isExpanded && hasReplies ? `<div class="comment-replies" style="margin-left:58px; margin-top:6px;">${replies.map(r => {
+                ${isExpanded && hasReplies ? `<div class="comment-replies comment-indent">${replies.map(r => {
                         const rDateTime = formatDateTimeEuropeMadrid(r.createdAt, r.date || comment.date, r.time || '');
                         const rDate = rDateTime.date;
                         const rTime = rDateTime.time;
@@ -3576,7 +3635,7 @@ function renderLastStatusWidget() {
                 html += `</div>`;
             }
 
-            html += `</div></div>`;
+            html += `</div></div>`; // cierra .ficha-section (comentarios) y .ficha-sections-grid
 
             let rightSidebarHtml = `
     <div class="right-sidebar">
@@ -3633,15 +3692,15 @@ function renderDashboard() {
         <div class="dash-filter-row">
             <div class="dash-filter-group">
                 <span class="dash-filter-label">🔍 Proyecto</span>
-                <input type="text" id="dashFilterProyecto" class="dash-filter-input" placeholder="Buscar..." value="${dashboardFilters.proyecto || ''}">
+                <input type="text" id="dashFilterProyecto" class="dash-filter-input" placeholder="Buscar..." aria-label="Buscar proyecto" value="${escapeHtml(dashboardFilters.proyecto || '')}">
             </div>
 
             <div class="dash-filter-group">
                 <span class="dash-filter-label">🚦 Estado</span>
                 <div class="dash-pills">
-                    <button class="dash-pill dash-pill--verde${(dashboardFilters.estados||[]).includes('Verde') ? ' active' : ''}" onclick="toggleDashFilter('estados','Verde')">✅ On Time</button>
-                    <button class="dash-pill dash-pill--ambar${(dashboardFilters.estados||[]).includes('Ámbar') ? ' active' : ''}" onclick="toggleDashFilter('estados','Ámbar')">⚠️ Riesgo</button>
-                    <button class="dash-pill dash-pill--rojo${(dashboardFilters.estados||[]).includes('Rojo') ? ' active' : ''}" onclick="toggleDashFilter('estados','Rojo')">🚫 Bloqueo</button>
+                    <button type="button" class="dash-pill dash-pill--verde${(dashboardFilters.estados||[]).includes('Verde') ? ' active' : ''}" aria-pressed="${(dashboardFilters.estados||[]).includes('Verde')}" onclick="toggleDashFilter('estados','Verde')">✅ On Time</button>
+                    <button type="button" class="dash-pill dash-pill--ambar${(dashboardFilters.estados||[]).includes('Ámbar') ? ' active' : ''}" aria-pressed="${(dashboardFilters.estados||[]).includes('Ámbar')}" onclick="toggleDashFilter('estados','Ámbar')">⚠️ Riesgo</button>
+                    <button type="button" class="dash-pill dash-pill--rojo${(dashboardFilters.estados||[]).includes('Rojo') ? ' active' : ''}" aria-pressed="${(dashboardFilters.estados||[]).includes('Rojo')}" onclick="toggleDashFilter('estados','Rojo')">🚫 Bloqueo</button>
                 </div>
             </div>
 
@@ -3649,7 +3708,7 @@ function renderDashboard() {
             <div class="dash-filter-group">
                 <span class="dash-filter-label">📋 Fase</span>
                 <div class="dash-pills">
-                    ${fases.map(f => `<button class="dash-pill${(dashboardFilters.fases||[]).includes(f) ? ' active' : ''}" onclick="toggleDashFilter('fases','${f}')">${f}</button>`).join('')}
+                    ${fases.map(f => `<button type="button" class="dash-pill${(dashboardFilters.fases||[]).includes(f) ? ' active' : ''}" aria-pressed="${(dashboardFilters.fases||[]).includes(f)}" onclick="toggleDashFilter('fases','${f}')">${f}</button>`).join('')}
                 </div>
             </div>` : ''}
 
@@ -3657,7 +3716,7 @@ function renderDashboard() {
             <div class="dash-filter-group">
                 <span class="dash-filter-label">⚡ Prioridad</span>
                 <div class="dash-pills">
-                    ${prioridades.map(p => `<button class="dash-pill${(dashboardFilters.prioridades||[]).includes(p) ? ' active' : ''}" onclick="toggleDashFilter('prioridades','${p}')">${p}</button>`).join('')}
+                    ${prioridades.map(p => `<button type="button" class="dash-pill${(dashboardFilters.prioridades||[]).includes(p) ? ' active' : ''}" aria-pressed="${(dashboardFilters.prioridades||[]).includes(p)}" onclick="toggleDashFilter('prioridades','${p}')">${p}</button>`).join('')}
                 </div>
             </div>` : ''}
 
@@ -3665,7 +3724,7 @@ function renderDashboard() {
             <div class="dash-filter-group">
                 <span class="dash-filter-label">💥 Impacto</span>
                 <div class="dash-pills">
-                    ${impactos.map(i => `<button class="dash-pill${(dashboardFilters.impactos||[]).includes(i) ? ' active' : ''}" onclick="toggleDashFilter('impactos','${i}')">${i}</button>`).join('')}
+                    ${impactos.map(i => `<button type="button" class="dash-pill${(dashboardFilters.impactos||[]).includes(i) ? ' active' : ''}" aria-pressed="${(dashboardFilters.impactos||[]).includes(i)}" onclick="toggleDashFilter('impactos','${i}')">${i}</button>`).join('')}
                 </div>
             </div>` : ''}
         </div>
@@ -3674,23 +3733,23 @@ function renderDashboard() {
             <div class="dash-filter-group">
                 <span class="dash-filter-label">📅 Inicio</span>
                 <div class="dash-date-range">
-                    <input type="date" class="dash-filter-input dash-date-input" value="${dashboardFilters.fechaInicioDesde || ''}" onchange="setDashboardFilter('fechaInicioDesde', this.value)">
+                    <input type="date" class="dash-filter-input dash-date-input" value="${dashboardFilters.fechaInicioDesde || ''}" aria-label="Inicio desde" onchange="setDashboardFilter('fechaInicioDesde', this.value)">
                     <span class="dash-date-sep">→</span>
-                    <input type="date" class="dash-filter-input dash-date-input" value="${dashboardFilters.fechaInicioHasta || ''}" onchange="setDashboardFilter('fechaInicioHasta', this.value)">
+                    <input type="date" class="dash-filter-input dash-date-input" value="${dashboardFilters.fechaInicioHasta || ''}" aria-label="Inicio hasta" onchange="setDashboardFilter('fechaInicioHasta', this.value)">
                 </div>
             </div>
 
             <div class="dash-filter-group">
                 <span class="dash-filter-label">📅 Fin</span>
                 <div class="dash-date-range">
-                    <input type="date" class="dash-filter-input dash-date-input" value="${dashboardFilters.fechaFinDesde || ''}" onchange="setDashboardFilter('fechaFinDesde', this.value)">
+                    <input type="date" class="dash-filter-input dash-date-input" value="${dashboardFilters.fechaFinDesde || ''}" aria-label="Fin desde" onchange="setDashboardFilter('fechaFinDesde', this.value)">
                     <span class="dash-date-sep">→</span>
-                    <input type="date" class="dash-filter-input dash-date-input" value="${dashboardFilters.fechaFinHasta || ''}" onchange="setDashboardFilter('fechaFinHasta', this.value)">
+                    <input type="date" class="dash-filter-input dash-date-input" value="${dashboardFilters.fechaFinHasta || ''}" aria-label="Fin hasta" onchange="setDashboardFilter('fechaFinHasta', this.value)">
                 </div>
             </div>
 
             <div class="dash-filter-group dash-filter-group--action">
-                <button class="btn-clear-filters" onclick="clearDashboardFilters()">
+                <button type="button" class="btn-clear-filters" onclick="clearDashboardFilters()"${activeFiltersCount ? '' : ' disabled'}>
                     🗑️ Limpiar${activeFiltersCount > 0 ? ` (${activeFiltersCount})` : ''}
                 </button>
             </div>
@@ -3763,26 +3822,30 @@ function renderDashboard() {
             </div>
         </div>
 
-        <div class="dashboard-table-container" style="max-height: 400px; overflow-y: auto;">
+        <div class="dashboard-table-container">
             <table class="dashboard-table">
                 <thead>
                     <tr>
-                        <th onclick="toggleDashboardSort('name')" class="sortable-header">Proyecto ${getSortIndicator('name')}</th>
-                        <th onclick="toggleDashboardSort('startDate')" class="sortable-header">Inicio ${getSortIndicator('startDate')}</th>
-                        <th onclick="toggleDashboardSort('endDate')" class="sortable-header">Fin ${getSortIndicator('endDate')}</th>
-                        <th onclick="toggleDashboardSort('phase')" class="sortable-header">Fase ${getSortIndicator('phase')}</th>
-                        <th onclick="toggleDashboardSort('priority')" class="sortable-header">Prioridad ${getSortIndicator('priority')}</th>
-                        <th onclick="toggleDashboardSort('impact')" class="sortable-header">Impacto ${getSortIndicator('impact')}</th>
-                        <th onclick="toggleDashboardSort('status')" class="sortable-header">Estado ${getSortIndicator('status')}</th>
-                        <th onclick="toggleDashboardSort('progress')" class="sortable-header">Avance ${getSortIndicator('progress')}</th>
-                        <th onclick="toggleDashboardSort('volume')" class="sortable-header">Ahorro € ${getSortIndicator('volume')}</th>
-                        <th onclick="toggleDashboardSort('fte')" class="sortable-header">Ahorro FTE ${getSortIndicator('fte')}</th>
+                        ${renderSortableHeader('name', 'Proyecto', dashboardSort, 'toggleDashboardSort')}
+                        ${renderSortableHeader('startDate', 'Inicio', dashboardSort, 'toggleDashboardSort')}
+                        ${renderSortableHeader('endDate', 'Fin', dashboardSort, 'toggleDashboardSort')}
+                        ${renderSortableHeader('phase', 'Fase', dashboardSort, 'toggleDashboardSort')}
+                        ${renderSortableHeader('priority', 'Prioridad', dashboardSort, 'toggleDashboardSort')}
+                        ${renderSortableHeader('impact', 'Impacto', dashboardSort, 'toggleDashboardSort')}
+                        ${renderSortableHeader('status', 'Estado', dashboardSort, 'toggleDashboardSort')}
+                        ${renderSortableHeader('progress', 'Avance', dashboardSort, 'toggleDashboardSort')}
+                        ${renderSortableHeader('volume', 'Ahorro €', dashboardSort, 'toggleDashboardSort')}
+                        ${renderSortableHeader('fte', 'Ahorro FTE', dashboardSort, 'toggleDashboardSort')}
                     </tr>
                 </thead>
                 <tbody>`;
 
     // Aplicar ordenamiento
     const sortedProjects = sortDashboardProjects(filteredProjects);
+
+    if (!sortedProjects.length) {
+        html += `<tr><td colspan="10" class="table-empty">No hay proyectos que cumplan los filtros seleccionados.</td></tr>`;
+    }
 
     sortedProjects.forEach(p => {
         const start = formatDateDisplay(p.startDate);
@@ -3793,7 +3856,7 @@ function renderDashboard() {
         totalVolume += volume;
         totalFte += fte;
         html += `
-        <tr class="dashboard-row" onclick="hideStatusTooltip(); selectProject('${p.id}'); switchView('ficha')"
+        <tr class="dashboard-row" tabindex="0" onclick="hideStatusTooltip(); selectProject('${p.id}')" onkeydown="activateOnEnterOrSpace(event)"
             onmouseenter="showStatusTooltip(event, '${p.id}')"
             onmouseleave="hideStatusTooltip()">
             <td class="dash-name">${escapeHtml(p.name || 'Sin nombre')}</td>
@@ -3804,7 +3867,7 @@ function renderDashboard() {
             <td><span class="badge badge-${(p.impact || 'Medio').toLowerCase()}">${p.impact || '-'}</span></td>
             <td><span class="badge badge-status badge-${(p.status || 'Verde').toLowerCase()}">${getStatusText(p.status) || '-'}</span></td>
             <td>
-                <div class="progress-bar-container">
+                <div class="progress-bar-container" role="progressbar" aria-label="Avance" aria-valuenow="${progress}" aria-valuemin="0" aria-valuemax="100">
                     <div class="progress-bar-fill" style="width: ${progress}%"></div>
                     <span class="progress-bar-text">${progress}%</span>
                 </div>
@@ -3846,7 +3909,7 @@ function renderDashboard() {
     <div class="dashboard-capacity-section">
         <div class="capacity-card">
             <h3 class="capacity-title">Dedicación Semanal del Equipo</h3>
-            <p class="capacity-subtitle"></p>
+            <p class="capacity-subtitle">Suma de la capacidad asignada en todos los proyectos. Más del 100% indica sobrecarga.</p>
             <table class="capacity-table">
                 <thead>
                     <tr>
@@ -3984,10 +4047,6 @@ function toggleDashboardSort(column) {
     renderDashboard();
 }
 
-function getSortIndicator(column) {
-    if (dashboardSort.column !== column) return '';
-    return dashboardSort.direction === 'asc' ? '▲' : '▼';
-}
 
 function sortDashboardProjects(projects) {
     if (!dashboardSort.column) return projects;
@@ -4067,10 +4126,6 @@ function toggleDailySort(column) {
     renderDaily();
 }
 
-function getSortIndicatorDaily(column) {
-    if (dailySort.column !== column) return '';
-    return dailySort.direction === 'asc' ? '▲' : '▼';
-}
 
 function sortDailyProjects(projects) {
     if (!dailySort.column) return projects;
@@ -4084,9 +4139,8 @@ function sortDailyProjects(projects) {
                 bVal = (b.name || '').toLowerCase();
                 break;
             case 'status':
-                const phaseOrder = { 'Idea': 1, 'En Progreso': 2, 'On Hold': 3, 'Cerrado': 4 };
-                aVal = phaseOrder[a.phase] || 0;
-                bVal = phaseOrder[b.phase] || 0;
+                aVal = PROJECT_PHASES.indexOf(a.phase) + 1;
+                bVal = PROJECT_PHASES.indexOf(b.phase) + 1;
                 break;
             case 'startDate':
                 aVal = a.startDate || '';
@@ -4113,19 +4167,6 @@ function sortDailyProjects(projects) {
             switchView('daily');
         }
 
-        function togglePrerequisite(projectId, index) {
-            const project = projects.find(p => p.id === projectId);
-            if (project) {
-                // 1. Actualizar en memoria
-                project.prerequisites[index].completed = !project.prerequisites[index].completed;
-
-                // 2. Re-renderizar la ficha para ver el cambio inmediatamente
-                renderFicha();
-
-                // 3. Guardar en Supabase
-                updateProjectField(projectId, 'prerequisites', project.prerequisites);
-            }
-        }
 
         async function togglePrereqStatus(projectId, prereqName, type, isChecked) {
             const project = projects.find(p => p.id === projectId);
@@ -4183,105 +4224,91 @@ function sortDailyProjects(projects) {
 
 
 
+        let currentView = 'daily';
+
+        const VIEW_TITLES = {
+            daily: 'Daily',
+            ficha: 'Ficha Proyecto',
+            equipo: 'Calendario de Equipo',
+            dashboard: 'Dashboard Proyectos'
+        };
+
         function switchView(view) {
+            if (!VIEW_TITLES[view]) return;
             closeMobileSidebar();
+            closeAllDropdowns();
+            closeResponsiblesPopover();
+
             // Si salimos de Equipo y el sidebar fue colapsado automáticamente, restaurarlo
             if (view !== 'equipo' && sidebarAutoCollapsed) {
-                const sidebar = document.getElementById('sidebar');
-                const toggleBtn = document.getElementById('sidebarToggle');
-                if (sidebar) {
-                    sidebar.classList.remove('collapsed');
-                    if (toggleBtn) { toggleBtn.textContent = '◀'; toggleBtn.title = 'Contraer panel'; }
-                }
+                setSidebarCollapsed(false);
                 sidebarAutoCollapsed = false;
             }
 
-            // 1. Referencias a los contenedores
-            const dailyView = document.querySelector('.daily-view');
-            const fichaView = document.querySelector('.project-ficha');
-            const teamView = document.querySelector('.team-view');
-            const dashboardView = document.querySelector('.dashboard-view');
+            // El calendario anual tiene miles de celdas: se libera al salir de Equipo
+            if (currentView === 'equipo' && view !== 'equipo') {
+                const teamView = document.getElementById('teamView');
+                if (teamView) teamView.innerHTML = '';
+            }
 
-            // 2. Ocultar TODO visualmente
-            dailyView.classList.remove('active');
-            fichaView.classList.remove('active');
-            teamView.classList.remove('active');
-            dashboardView.classList.remove('active');
+            currentView = view;
 
-            // 3. Quitar clase active de botones
-            document.querySelectorAll('.view-toggle button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.content-area > [data-view]').forEach(section => {
+                section.classList.toggle('active', section.dataset.view === view);
+            });
+            document.querySelectorAll('.view-toggle button').forEach(btn => {
+                const isActive = btn.dataset.view === view;
+                btn.classList.toggle('active', isActive);
+                btn.setAttribute('aria-pressed', String(isActive));
+            });
+            const titleEl = document.getElementById('viewTitle');
+            if (titleEl) titleEl.textContent = VIEW_TITLES[view];
 
-            // 4. Lógica de activación y LIMPIEZA
-            if (view === 'daily') {
-                dailyView.classList.add('active');
-                document.querySelector('.view-toggle button:nth-child(1)').classList.add('active');
-                document.getElementById('viewTitle').textContent = 'Daily';
-
-                // Limpiar la vista de equipo para evitar duplicados fantasma
-                teamView.innerHTML = '';
-
-                renderDaily();
-            } else if (view === 'ficha') {
-                fichaView.classList.add('active');
-                document.querySelector('.view-toggle button:nth-child(2)').classList.add('active');
-                document.getElementById('viewTitle').textContent = 'Ficha Proyecto';
-
-                // Limpiar la vista de equipo
-                teamView.innerHTML = '';
-
-                renderFicha();
-            } else if (view === 'equipo') {
-                teamView.classList.add('active');
-                document.querySelector('.view-toggle button:nth-child(3)').classList.add('active');
-                document.getElementById('viewTitle').textContent = 'Calendario de Equipo';
-                // Contraer sidebar automáticamente para ganar visibilidad
+            if (view === 'equipo') {
+                // Contraer el sidebar automáticamente para ganar visibilidad en el calendario anual
                 const sidebar = document.getElementById('sidebar');
-                const toggleBtn = document.getElementById('sidebarToggle');
                 if (sidebar && window.matchMedia('(min-width: 769px)').matches && !sidebar.classList.contains('collapsed')) {
-                    sidebar.classList.add('collapsed');
-                    if (toggleBtn) { toggleBtn.textContent = '▶'; toggleBtn.title = 'Expandir panel'; }
+                    setSidebarCollapsed(true);
                     sidebarAutoCollapsed = true;
                 }
-                renderTeamView();
-            } else if (view === 'dashboard') {          // <-- AQUÍ
-                dashboardView.classList.add('active');
-                document
-                  .querySelector('.view-toggle button:nth-child(4)')
-                  .classList.add('active');
-                document.getElementById('viewTitle').textContent = 'Dashboard Proyectos';
-                renderDashboard();            
-            
             }
+
+            renderActiveView();
+        }
+
+        function renderActiveView() {
+            if (currentView === 'daily') renderDaily();
+            else if (currentView === 'ficha') renderFicha();
+            else if (currentView === 'equipo') renderTeamView();
+            else if (currentView === 'dashboard') renderDashboard();
         }
 
 
 
         async function loadDataFromSupabase(skipRender = false) {
-            await loadCapacities();
-            await loadProjectStatuses();
-            await loadProjectNotes();
-            await loadWeeklyTasks();
-            await loadIncidents();
-            await loadDayPersonalTasks();
-            const { data: projData, error: projError } = await supabaseClient
-                .from('projects')
-                .select('*')
-                .order('created_at', { ascending: true });
+            // Todas las lecturas son independientes: se lanzan en paralelo
+            const [, , , , , , projectsResult, commentsResult] = await Promise.all([
+                loadCapacities(),
+                loadProjectStatuses(),
+                loadProjectNotes(),
+                loadWeeklyTasks(),
+                loadIncidents(),
+                loadDayPersonalTasks(),
+                supabaseClient.from('projects').select('*').order('created_at', { ascending: true }),
+                supabaseClient.from('daily_comments').select('*').order('created_at', { ascending: true })
+            ]);
 
+            const { data: projData, error: projError } = projectsResult;
             if (projError) {
                 console.error(projError);
-                alert('Error cargando proyectos');
+                showToast('Error cargando proyectos', 'error');
                 return;
             }
 
-            const { data: comData, error: comError } = await supabaseClient
-                .from('daily_comments')
-                .select('*')
-                .order('created_at', { ascending: true });
-
+            const { data: comData, error: comError } = commentsResult;
             if (comError) {
                 console.error(comError);
-                alert('Error cargando comentarios');
+                showToast('Error cargando comentarios', 'error');
                 return;
             }
 
@@ -4363,85 +4390,75 @@ function sortDailyProjects(projects) {
             }
             updateWeekInfo();
 
-            // Solo renderizar si no se especifica skipRender
             if (!skipRender) {
-    renderDaily();
-    renderFicha();  // ← AÑADE ESTA LÍNEA
-}
+                renderActiveView();
+            }
         }
 
 
 
-        let projectsChannel = supabaseClient.channel('projects-changes');
-        let commentsChannel = supabaseClient.channel('comments-changes');
-        let notesChannel = supabaseClient.channel('notes-changes');
+        // =====================================================
+        // ================= TIEMPO REAL (SUPABASE) ============
+        // Un único manejador: recarga datos y refresca la vista
+        // activa y los modales abiertos. Si el usuario está
+        // escribiendo, el refresco se pospone hasta que suelte el foco.
+        // =====================================================
 
-        projectsChannel
-            .on('postgres_changes',
-                { event: '*', schema: 'public', table: 'projects' },
-                async (payload) => {
-                    // console.log('Proyecto actualizado:', payload.new);
-                    await loadDataFromSupabase();
-                }
-            )
-            .subscribe();
+        let realtimeRefreshPending = false;
+        let realtimeInFlight = false;
 
-        commentsChannel
-            .on('postgres_changes',
-                { event: '*', schema: 'public', table: 'daily_comments' },
-                async (payload) => {
-                    // console.log('Comentario nuevo/editado:', payload.new);
-                    await loadDataFromSupabase();
-                }
-            )
-            .subscribe();
+        function isUserTypingInApp() {
+            const el = document.activeElement;
+            if (!el) return false;
+            const isTextField = el.tagName === 'TEXTAREA' ||
+                (el.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'submit'].includes(el.type));
+            if (!isTextField) return false;
+            return !!el.closest('.content-area, #commentsListModal, #dayPersonalTasksModal');
+        }
 
-        notesChannel
-            .on('postgres_changes',
-                { event: '*', schema: 'public', table: 'project_notes' },
-                async () => {
-                    await loadDataFromSupabase();
-                }
-            )
-            .subscribe();
+        function refreshOpenOverlays() {
+            const listModal = document.getElementById('commentsListModal');
+            if (listModal && listModal.classList.contains('active') && commentsListContext.projectId && commentsListContext.dateKey) {
+                renderCommentsListContent(commentsListContext.projectId, commentsListContext.dateKey);
+            }
+            const dayModal = document.getElementById('dayPersonalTasksModal');
+            if (dayModal && dayModal.classList.contains('active')) {
+                renderDayPersonalTasksModal();
+            }
+        }
 
-        let weeklyTasksChannel = supabaseClient.channel('weekly-tasks-changes');
-        let incidentsChannel = supabaseClient.channel('incidents-changes');
-        let dayPersonalTasksChannel = supabaseClient.channel('day-personal-tasks-changes');
+        async function handleRealtimeChange() {
+            if (!appInitialized) return;
+            if (isUserTypingInApp() || realtimeInFlight) {
+                realtimeRefreshPending = true;
+                return;
+            }
+            realtimeInFlight = true;
+            realtimeRefreshPending = false;
+            try {
+                await loadDataFromSupabase(true);
+                renderActiveView();
+                refreshOpenOverlays();
+            } finally {
+                realtimeInFlight = false;
+                if (realtimeRefreshPending) setTimeout(handleRealtimeChange, 50);
+            }
+        }
 
-        weeklyTasksChannel
-            .on('postgres_changes',
-                { event: '*', schema: 'public', table: 'project_weekly_tasks' },
-                async () => {
-                    await loadWeeklyTasks();
-                    renderWeeklyWidgetInPlace();
-                }
-            )
-            .subscribe();
+        document.addEventListener('focusout', () => {
+            if (!realtimeRefreshPending) return;
+            setTimeout(() => {
+                if (realtimeRefreshPending && !isUserTypingInApp()) handleRealtimeChange();
+            }, 50);
+        });
 
-        incidentsChannel
-            .on('postgres_changes',
-                { event: '*', schema: 'public', table: 'project_incidents' },
-                async () => {
-                    await loadIncidents();
-                    renderIncidentsWidgetInPlace();
-                }
-            )
-            .subscribe();
-
-        dayPersonalTasksChannel
-            .on('postgres_changes',
-                { event: '*', schema: 'public', table: DAY_PERSONAL_TASKS_TABLE },
-                async () => {
-                    await loadDayPersonalTasks();
-                    renderDaily();
-                    const modal = document.getElementById('dayPersonalTasksModal');
-                    if (modal && modal.classList.contains('active')) {
-                        renderDayPersonalTasksModal();
-                    }
-                }
-            )
-            .subscribe();
+        ['projects', 'daily_comments', 'project_notes', 'project_weekly_tasks', 'project_incidents', DAY_PERSONAL_TASKS_TABLE]
+            .forEach(table => {
+                supabaseClient
+                    .channel(`${table}-changes`)
+                    .on('postgres_changes', { event: '*', schema: 'public', table }, handleRealtimeChange)
+                    .subscribe();
+            });
 
 
         // =====================================================
@@ -4462,18 +4479,30 @@ function sortDailyProjects(projects) {
             let html = `
     <div class="team-header">
         <div class="month-navigation">
-            <button class="month-nav-btn" onclick="previousYear()">← Año anterior</button>
+            <button type="button" class="month-nav-btn" onclick="previousYear()">← Año anterior</button>
             <div class="current-month">${year}</div>
-            <button class="month-nav-btn" onclick="nextYear()">Año siguiente →</button>
+            <button type="button" class="month-nav-btn" onclick="nextYear()">Año siguiente →</button>
         </div>
         <div class="calendar-zoom-controls">
-            <button class="zoom-btn" onclick="zoomCalendar(-1)" title="Reducir">−</button>
+            <button type="button" class="zoom-btn" onclick="zoomCalendar(-1)" title="Reducir zoom" aria-label="Reducir zoom">−</button>
             <span class="zoom-label">Zoom</span>
-            <button class="zoom-btn" onclick="zoomCalendar(1)" title="Ampliar">+</button>
+            <button type="button" class="zoom-btn" onclick="zoomCalendar(1)" title="Ampliar zoom" aria-label="Ampliar zoom">+</button>
         </div>
-        <button class="month-nav-btn" onclick="openVacationModal()">➕ Añadir vacaciones</button>
+        <button type="button" class="month-nav-btn month-nav-btn--accent" onclick="openVacationModal()">➕ Añadir vacaciones${selectedVacationDays.length ? ` (${selectedVacationDays.length})` : ''}</button>
     </div>
     ${holidayCalendarStatus}
+    <div class="calendar-help">
+        <p class="calendar-hint">Haz clic en un día de tu fila para marcar vacaciones. Con Ctrl+Clic seleccionas varios días y luego pulsas «Añadir vacaciones». Clic sobre un día ya marcado para eliminarlo.</p>
+        <ul class="calendar-legend" aria-label="Leyenda del calendario">
+            <li><span class="legend-swatch legend-swatch--current"></span>Año actual</li>
+            <li><span class="legend-swatch legend-swatch--previous"></span>Año anterior</li>
+            <li><span class="legend-swatch legend-swatch--willis"></span>Willis Choice</li>
+            <li><span class="legend-swatch legend-swatch--selected"></span>Seleccionado</li>
+            <li><span class="legend-swatch legend-swatch--holiday"></span>Festivo</li>
+            <li><span class="legend-swatch legend-swatch--weekend"></span>Fin de semana</li>
+            <li><span class="legend-swatch legend-swatch--today"></span>Hoy</li>
+        </ul>
+    </div>
 `;
 
 
@@ -4482,9 +4511,6 @@ function sortDailyProjects(projects) {
 
             // NUEVA SECCIÓN: Resumen de vacaciones
             html += renderVacationSummary();
-
-            // Estadísticas (las del usuario actual, puedes quitarlas si quieres)
-            // html += renderTeamStats(); // <-- Comenta o borra esta línea si no la quieres
 
             container.innerHTML = html;
             // Aplicar el zoom actual tras cada render (las variables CSS se pierden al reescribir el DOM)
@@ -4589,56 +4615,6 @@ function sortDailyProjects(projects) {
         }
 
 
-        function renderTeamStats() {
-            const year = currentMonth.getFullYear();
-            const month = currentMonth.getMonth();
-            const currentYear = new Date().getFullYear();
-
-            // Obtener usuario actual, fallback a 'NN' si no está definido
-            const userToFilter = typeof currentUser !== 'undefined' ? currentUser : 'NN';
-
-            // Vacaciones este mes (solo del usuario actual)
-            const myVacationsThisMonth = teamVacations
-                .filter(v =>
-                    v.user_initials === userToFilter &&
-                    v.start_date.startsWith(`${year}-${String(month + 1).padStart(2, '0')}`)
-                )
-                .reduce((sum, v) => sum + (Number(v.days_count) || 0), 0);
-
-            // Total vacaciones año actual
-            const myVacationsCurrentYear = teamVacations
-                .filter(v =>
-                    v.user_initials === userToFilter &&
-                    (v.vacation_year === currentYear || (!v.vacation_year && new Date(v.start_date).getFullYear() === currentYear)) &&
-                    v.vacation_type === 'current_year'
-                )
-                .reduce((sum, v) => sum + (Number(v.days_count) || 0), 0);
-
-            // Total Willis Choice
-            const myWillisChoice = teamVacations
-                .filter(v =>
-                    v.user_initials === userToFilter &&
-                    v.vacation_type === 'willis_choice'
-                )
-                .reduce((sum, v) => sum + (Number(v.days_count) || 0), 0);
-
-            return `
-        <div class="team-stats">
-            <div class="stat-card">
-                <div class="stat-label">Vacaciones este mes (${userToFilter})</div>
-                <div class="stat-value">${myVacationsThisMonth.toFixed(1)} días</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Total vacaciones ${currentYear}</div>
-                <div class="stat-value">${myVacationsCurrentYear.toFixed(1)} días</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Total Willis Choice</div>
-                <div class="stat-value">${myWillisChoice.toFixed(1)} días</div>
-            </div>
-        </div>
-    `;
-        }
 
         function renderVacationSummary() {
             const currentYear = new Date().getFullYear();
@@ -4728,15 +4704,7 @@ function sortDailyProjects(projects) {
             renderTeamView();
         }
 
-        function previousMonth() {
-            currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
-            renderTeamView();
-        }
 
-        function nextMonth() {
-            currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
-            renderTeamView();
-        }
 
         function applyZoom() {
             const { w, font, hdrH } = ZOOM_LEVELS[calendarZoom];
@@ -4782,17 +4750,28 @@ function sortDailyProjects(projects) {
             renderTeamView();
         }
 
-        function toggleSidebar() {
+        function setSidebarCollapsed(collapsed) {
             const sidebar = document.getElementById('sidebar');
             const btn = document.getElementById('sidebarToggle');
+            if (!sidebar) return;
+            sidebar.classList.toggle('collapsed', collapsed);
+            if (btn) {
+                btn.textContent = collapsed ? '▶' : '◀';
+                btn.title = collapsed ? 'Expandir panel' : 'Contraer panel';
+                btn.setAttribute('aria-label', btn.title);
+                btn.setAttribute('aria-expanded', String(!collapsed));
+            }
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            if (!sidebar) return;
             if (window.matchMedia('(max-width: 768px)').matches) {
                 closeMobileSidebar();
                 return;
             }
-            const collapsed = sidebar.classList.toggle('collapsed');
-            btn.textContent = collapsed ? '▶' : '◀';
-            btn.title = collapsed ? 'Expandir panel' : 'Contraer panel';
-            btn.setAttribute('aria-label', btn.title);
+            setSidebarCollapsed(!sidebar.classList.contains('collapsed'));
+            sidebarAutoCollapsed = false; // el usuario ha decidido manualmente
         }
 
         function toggleMobileSidebar() {
@@ -4835,7 +4814,7 @@ function sortDailyProjects(projects) {
 
         function toggleVacation(member, dateKey, event) {
             if (member !== currentUser) {
-                alert('Solo puedes marcar tus propias vacaciones');
+                showToast('Solo puedes marcar tus propias vacaciones', 'warning');
                 return;
             }
 
@@ -4876,7 +4855,7 @@ function sortDailyProjects(projects) {
 
             // Si NO es Ctrl+Clic y hay selecciones previas sin vacaciones, mostrar alerta
             if (selectedVacationDays.length > 0) {
-                alert('Ya tienes días seleccionados. Usa el botón "Añadir vacaciones" para confirmar o haz Ctrl+Clic en los días para deseleccionarlos.');
+                showToast('Ya tienes días seleccionados. Usa el botón "Añadir vacaciones" para confirmar o haz Ctrl+Clic en los días para deseleccionarlos.', 'warning');
                 return;
             }
 
@@ -4900,13 +4879,11 @@ function sortDailyProjects(projects) {
                 <option value="willis_choice">Willis Choice (${currentYear})</option>
             `;
             selectionLabel.textContent = `${datesToAdd.length} ${datesToAdd.length === 1 ? 'día completo' : 'días completos'}`;
-            modal.classList.add('active');
-            typeSelect.focus();
+            openModal('vacationOptionsModal', '#vacationTypeSelect');
         }
 
         function closeVacationOptionsModal() {
-            const modal = document.getElementById('vacationOptionsModal');
-            if (modal) modal.classList.remove('active');
+            closeModal('vacationOptionsModal');
             pendingVacationSelection = null;
         }
 
@@ -4945,13 +4922,14 @@ function sortDailyProjects(projects) {
 
             if (error) {
                 console.error(error);
-                alert('Error añadiendo vacación');
+                showToast('Error añadiendo vacación', 'error');
                 return;
             }
 
             selectedVacationDays = [];
             await loadTeamVacations();
             renderTeamView();
+            showToast(`${vacationRecords.length} día${vacationRecords.length === 1 ? '' : 's'} de vacaciones añadido${vacationRecords.length === 1 ? '' : 's'}`, 'success');
         }
 
         async function deleteVacation(vacationId) {
@@ -4962,12 +4940,13 @@ function sortDailyProjects(projects) {
 
             if (error) {
                 console.error(error);
-                alert('Error eliminando vacación');
+                showToast('Error eliminando vacación', 'error');
                 return;
             }
 
             await loadTeamVacations();
             renderTeamView();
+            showToast('Vacaciones eliminadas', 'success');
         }
 
         async function loadTeamVacations() {
@@ -4986,7 +4965,7 @@ function sortDailyProjects(projects) {
 
         function openVacationModal() {
             if (selectedVacationDays.length === 0) {
-                alert('Por favor, selecciona días usando Ctrl+Clic en el calendario');
+                showToast('Por favor, selecciona días usando Ctrl+Clic en el calendario', 'info');
                 return;
             }
 
@@ -4994,7 +4973,7 @@ function sortDailyProjects(projects) {
             const members = [...new Set(selectedVacationDays.map(d => d.member))];
 
             if (members.length > 1) {
-                alert('Has seleccionado días de diferentes miembros del equipo. Por favor, selecciona solo tus días.');
+                showToast('Has seleccionado días de diferentes miembros del equipo. Por favor, selecciona solo tus días.', 'warning');
                 return;
             }
 
@@ -5005,9 +4984,6 @@ function sortDailyProjects(projects) {
         }
 
 
-        function changeUser() {
-            openUserSettingsModal();
-        }
 
         function updateUserDisplay() {
             const userIconEl = document.querySelector('.user-icon');
@@ -5042,13 +5018,11 @@ function sortDailyProjects(projects) {
             if (passwordConfirmInput) passwordConfirmInput.value = '';
             if (errorEl) errorEl.textContent = '';
 
-            modal.classList.add('active');
-            setTimeout(() => initialsInput && initialsInput.focus(), 0);
+            openModal('userSettingsModal', '#settingsInitials');
         }
 
         function closeUserSettingsModal() {
-            const modal = document.getElementById('userSettingsModal');
-            if (modal) modal.classList.remove('active');
+            closeModal('userSettingsModal');
         }
 
         async function saveUserSettings() {
@@ -5121,15 +5095,10 @@ function sortDailyProjects(projects) {
 
             updateUserDisplay();
             syncTeamMembersInSelectors();
-            renderDaily();
-            const dayModal = document.getElementById('dayPersonalTasksModal');
-            if (dayModal && dayModal.classList.contains('active')) {
-                renderDayPersonalTasksModal();
-            }
-            if (document.getElementById('fichaView')?.classList.contains('active')) {
-                renderFicha();
-            }
+            renderActiveView();
+            refreshOpenOverlays();
             closeUserSettingsModal();
+            showToast('Ajustes guardados', 'success');
         }
 
         function clearLoginSession() {
@@ -5167,39 +5136,9 @@ function sortDailyProjects(projects) {
             updateUserDisplay();
             syncTeamMembersInSelectors();
 
-            // 3. AGREGAR BOTÓN "HOY" A LA NAVEGACIÓN DE SEMANAS
-            setTimeout(() => {
-                const weekNav = document.querySelector('.week-navigation');
-                const weekInfo = weekNav?.querySelector('.week-info');
-                
-                if (weekNav && weekInfo && !weekNav.querySelector('#todayBtn')) {
-                    // Crear un contenedor para Hoy + fechas
-                    const centerGroup = document.createElement('div');
-                    centerGroup.style.display = 'flex';
-                    centerGroup.style.alignItems = 'center';
-                    centerGroup.style.gap = '12px';
-                    centerGroup.style.justifyContent = 'center';
-                    
-                    // Crear botón Hoy
-                    const todayBtn = document.createElement('button');
-                    todayBtn.id = 'todayBtn';
-                    todayBtn.className = 'week-nav-btn';
-                    todayBtn.textContent = 'Hoy';
-                    todayBtn.onclick = goToday;
-                    
-                    // Mover week-info al nuevo contenedor
-                    centerGroup.appendChild(todayBtn);
-                    weekInfo.parentNode.insertBefore(centerGroup, weekInfo);
-                    centerGroup.appendChild(weekInfo);
-                }
-            }, 100);
+            syncPhaseSelectors();
 
-            // 4. CONFIGURAR HEADERS DE SECCIONES COLAPSABLES
-            setTimeout(() => {
-                setupSidebarHeaders();
-            }, 100);
-
-            // 5. CARGAR DATOS
+            // 3. CARGAR DATOS
             await loadTeamVacations();
             await loadDataFromSupabase();
         }
@@ -5338,69 +5277,47 @@ function sortDailyProjects(projects) {
                 return;
             }
 
+            const loginForm = document.getElementById('loginForm');
             const loginButton = document.getElementById('loginButton');
             const initialsInput = document.getElementById('loginInitials');
-            const passwordInput = document.getElementById('loginPassword');
 
-            if (loginButton) {
+            if (loginForm) {
+                loginForm.addEventListener('submit', (event) => {
+                    event.preventDefault();
+                    void handleLoginAttempt();
+                });
+            } else if (loginButton) {
                 loginButton.addEventListener('click', () => {
                     void handleLoginAttempt();
                 });
             }
 
-            if (passwordInput) {
-                passwordInput.addEventListener('keydown', (event) => {
-                    if (event.key === 'Enter') {
-                        event.preventDefault();
-                        void handleLoginAttempt();
-                    }
-                });
-            }
-
             if (initialsInput) {
-                initialsInput.addEventListener('keydown', (event) => {
-                    if (event.key === 'Enter') {
-                        event.preventDefault();
-                        void handleLoginAttempt();
-                    }
-                });
-
                 setTimeout(() => initialsInput.focus(), 0);
             }
         }
 
-        function setupSidebarHeaders() {
-            const activosTitle = document.querySelector('.sidebar-title:nth-of-type(1)');
-            const completadosTitle = document.querySelector('.sidebar-title:nth-of-type(2)');
-
-            if (activosTitle) {
-                activosTitle.style.cursor = 'pointer';
-                activosTitle.style.transition = 'all 140ms ease';
-                activosTitle.onclick = () => toggleSidebarSection('activos');
-                const icon = document.createElement('span');
-                icon.className = 'section-toggle-icon';
-                icon.style.marginRight = '8px';
-                icon.style.display = 'inline-block';
-                icon.setAttribute('data-collapsed', sidebarCollapsed.activos ? 'true' : 'false');
-                activosTitle.insertBefore(icon, activosTitle.firstChild);
-            }
-
-            if (completadosTitle) {
-                completadosTitle.style.cursor = 'pointer';
-                completadosTitle.style.transition = 'all 140ms ease';
-                completadosTitle.onclick = () => toggleSidebarSection('completados');
-                const icon = document.createElement('span');
-                icon.className = 'section-toggle-icon';
-                icon.style.marginRight = '8px';
-                icon.style.display = 'inline-block';
-                icon.setAttribute('data-collapsed', sidebarCollapsed.completados ? 'true' : 'false');
-                completadosTitle.insertBefore(icon, completadosTitle.firstChild);
-            }
-        }
 
         window.addEventListener('load', setupLoginScreen);
         window.addEventListener('keydown', event => {
-            if (event.key === 'Escape') closeMobileSidebar();
+            if (event.key !== 'Escape') return;
+            if (closeTopModal()) return;
+            if (document.querySelector('.resp-popover')) { closeResponsiblesPopover(); return; }
+            if (document.querySelector('.indicator-dropdown.active')) { closeAllDropdowns(); return; }
+            closeMobileSidebar();
+        });
+
+        // Cierre por clic en el fondo, solo en modales marcados con data-backdrop-close
+        // (listas y confirmaciones; nunca formularios con texto que se perdería)
+        let backdropPointerDownTarget = null;
+        document.addEventListener('pointerdown', event => { backdropPointerDownTarget = event.target; });
+        document.addEventListener('click', event => {
+            const target = event.target;
+            if (!(target instanceof HTMLElement) || !target.classList.contains('modal')) return;
+            if (backdropPointerDownTarget !== target) return;
+            if (!target.classList.contains('active') || !target.hasAttribute('data-backdrop-close')) return;
+            const handler = MODAL_CLOSE_HANDLERS[target.id];
+            if (handler) handler(); else closeModal(target.id);
         });
         window.addEventListener('resize', () => {
             if (window.matchMedia('(max-width: 768px)').matches) {

@@ -16,3 +16,6 @@ const STANDARD_PREREQUISITES = [
     "Testing",
     "Dashboards"
 ];
+
+// Fases del ciclo de vida de un proyecto. El orden define el orden en tablas y selectores.
+const PROJECT_PHASES = ['Idea', 'En Progreso', 'On Hold', 'Mantenimiento', 'Hypercare', 'Cerrado'];
