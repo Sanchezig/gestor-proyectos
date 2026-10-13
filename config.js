@@ -4,17 +4,23 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Prerrequisitos estándar para todos los proyectos
+// Prerrequisitos estándar para todos los proyectos, en orden del ciclo de vida.
+// Se guardan por nombre, así que reordenar o añadir no afecta a los datos existentes.
 const STANDARD_PREREQUISITES = [
+    // Inicio
     "Business Case",
-    "Stakeholders",
     "Cálculo de Ahorros",
+    "Stakeholders",
     "Aprobaciones",
+    // Planificación y diseño
     "Project Plan",
-    "Comunicaciones",
-    "Traspaso a BAU",
+    "PDD",
+    // Construcción y validación
     "Testing",
-    "Dashboards"
+    "Dashboards",
+    // Puesta en marcha y cierre
+    "Comunicaciones",
+    "Traspaso a BAU"
 ];
 
 // Fases del ciclo de vida de un proyecto. El orden define el orden en tablas y selectores.
