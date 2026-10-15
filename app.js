@@ -1403,13 +1403,16 @@ function setDashboardFilter(field, value) {
                 ? applyDailyFilters(bauProjects.filter(bauHasActivity))
                 : [];
 
-            const bauTabButton = document.getElementById('btnDailyBau');
-            if (bauTabButton) {
-                const bauWithIncidents = bauProjects.filter(p => countOpenIncidents(p.id) > 0).length;
-                bauTabButton.innerHTML = bauWithIncidents
-                    ? `BAU <span class="daily-mode-badge" title="${bauWithIncidents} con incidencias abiertas">⚠ ${bauWithIncidents}</span>`
-                    : 'BAU';
-            }
+            // Cada pestaña muestra cuántos de sus proyectos (con los filtros aplicados) tienen incidencias abiertas
+            [['btnDailyActivos', 'activos', 'Activos'], ['btnDailyBau', 'bau', 'BAU'], ['btnDailyCompletados', 'completados', 'Completados']].forEach(([id, group, label]) => {
+                const tabButton = document.getElementById(id);
+                if (!tabButton) return;
+                const withIncidents = applyDailyFilters(projects.filter(p => getProjectGroup(p) === group))
+                    .filter(p => countOpenIncidents(p.id) > 0).length;
+                tabButton.innerHTML = withIncidents
+                    ? `${label} <span class="daily-mode-badge" title="${withIncidents} con incidencias abiertas">⚠ ${withIncidents}</span>`
+                    : label;
+            });
 
 
             // <--- CAMBIO 1: ELIMINADO EL BLOQUE QUE RETORNABA EARLY SI NO HABÍA RESULTADOS
@@ -1542,7 +1545,7 @@ function setDashboardFilter(field, value) {
 
             const appendProjectRow = (project) => {
                     const selectedClass = project.id === currentProjectId ? 'selected-row' : '';
-                    const openIncidents = getProjectGroup(project) === 'bau' ? countOpenIncidents(project.id) : 0;
+                    const openIncidents = countOpenIncidents(project.id);
                     const incidentBadge = openIncidents
                         ? ` <span class="bau-incident-badge" title="${openIncidents} incidencia(s) abierta(s)">⚠ ${openIncidents}</span>`
                         : '';
@@ -3379,6 +3382,8 @@ function renderLastStatusWidget() {
         // =====================================================
 
 
+        let lastRenderedFichaProjectId = null;
+
         function renderFicha() {
             if (!currentProjectId) {
                 document.getElementById('fichaView').innerHTML = `<div class="empty-state">Selecciona un proyecto para ver su ficha.</div>`;
@@ -3716,8 +3721,23 @@ function renderLastStatusWidget() {
     </div>
 `;
 
-document.getElementById('fichaView').innerHTML = html + rightSidebarHtml;
+            // Al redibujar el mismo proyecto, conservamos el scroll de las listas con scroll propio
+            const fichaView = document.getElementById('fichaView');
+            const scrollSelectors = ['.comments-box', '.status-history-container', '.project-notes-list', '.weekly-tasks-list', '.incidents-list'];
+            const savedScroll = lastRenderedFichaProjectId === currentProjectId
+                ? scrollSelectors.map(sel => Array.from(fichaView.querySelectorAll(sel), el => el.scrollTop))
+                : null;
 
+            fichaView.innerHTML = html + rightSidebarHtml;
+            lastRenderedFichaProjectId = currentProjectId;
+
+            if (savedScroll) {
+                scrollSelectors.forEach((sel, i) => {
+                    fichaView.querySelectorAll(sel).forEach((el, j) => {
+                        if (savedScroll[i][j]) el.scrollTop = savedScroll[i][j];
+                    });
+                });
+            }
 
         }
 

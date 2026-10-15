@@ -2918,9 +2918,9 @@ button:disabled {
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    min-height: 46px;
+    min-height: 34px;
     box-sizing: border-box;
-    padding: 10px 12px;
+    padding: 4px 10px;
     background: var(--color-checkbox-bg);
     border-radius: 8px;
     border: 1px solid transparent;
@@ -2934,7 +2934,7 @@ button:disabled {
 .prereq-left {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
     min-width: 0;
 }
 
@@ -2943,13 +2943,15 @@ button:disabled {
     height: 18px;
     cursor: pointer;
     accent-color: var(--color-success);
-    margin-top: 0;
+    margin: 0;
+    flex-shrink: 0;
 }
 
 .prereq-label {
     font-size: 13px;
     color: var(--color-text);
     font-weight: 500;
+    line-height: 1.2;
 }
 
 .prereq-label.completed {
@@ -3008,18 +3010,17 @@ button:disabled {
 
 .prereq-na-wrapper label {
     cursor: pointer;
-    margin-right: 4px;
 }
 
 .prereq-na-wrapper {
     flex-shrink: 0;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     font-size: 11px;
     color: var(--color-text-secondary);
     background: rgba(255, 255, 255, 0.5);
-    padding: 4px 8px;
+    padding: 3px 6px;
     border-radius: 6px;
     border: 1px solid rgba(0, 0, 0, 0.05);
 }
@@ -3029,6 +3030,8 @@ button:disabled {
     height: 14px;
     cursor: pointer;
     accent-color: var(--color-text-secondary);
+    margin: 0;
+    flex-shrink: 0;
 }
 
 #current-status-display {
